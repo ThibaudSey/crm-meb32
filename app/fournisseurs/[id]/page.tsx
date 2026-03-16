@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useParams, useRouter } from "next/navigation"
 import {
   ArrowLeft, Plus, X, Copy, Check,
@@ -8,13 +8,17 @@ import {
 } from "lucide-react"
 import Sidebar from "@/components/Sidebar"
 import TopBar from "@/components/TopBar"
+import { supabase } from "@/lib/supabase"
+import type { Fournisseur, FournisseurContact, FournisseurProduit, DemandeDevisFournisseur, Affaire } from "@/lib/types"
+import LoadingSpinner from "@/components/LoadingSpinner"
+import ErrorMessage from "@/components/ErrorMessage"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface Contact { id: number; prenom: string; nom: string; fonction: string; tel: string; email: string; notes: string; est_principal: boolean }
-interface Produit  { id: number; nom: string; description: string; prix_min: number; prix_max: number; delai: string; points_forts: string; points_faibles: string }
+interface Contact { id: string; prenom: string; nom: string; fonction: string; tel: string; email: string; notes: string; est_principal: boolean }
+interface Produit  { id: string; nom: string; description: string; prix_min: number; prix_max: number; delai: string; points_forts: string; points_faibles: string }
 interface InfoOblig { id: number; libelle: string; type: "texte" | "nombre" | "plan" | "photo"; obligatoire: boolean }
-interface Historique { id: number; date: string; affaire: string; montant_demande: number; delai_reponse: number | null; montant_recu: number | null; statut: "reçu" | "en_attente" | "refusé" }
+interface Historique { id: string; date: string; affaire: string; montant_demande: number; delai_reponse: number | null; montant_recu: number | null; statut: "reçu" | "en_attente" | "refusé" }
 interface PromptResult { email_objet: string; email_corps: string; checklist: string[]; questions: string[]; delai_relance: string }
 
 // ─── Config ───────────────────────────────────────────────────────────────────
@@ -37,79 +41,6 @@ const STATUT_CONFIG = {
   inactif:     { badge: "bg-white/10 border border-white/20 text-white/40",                label: "Inactif" },
   blacklisté:  { badge: "bg-red-500/20 border border-red-500/40 text-red-300",             label: "Blacklisté" },
 }
-
-const AFFAIRES = [
-  { id: "1", label: "EARL Morin – Neuf 22 000 pl.",        type: "Neuf",         espece: "Poulet chair",     nb_places: "22 000", surface: "1 200" },
-  { id: "2", label: "Gauthier Volailles – Extension",      type: "Extension",    espece: "Poulet label/bio", nb_places: "11 000", surface: "600"   },
-  { id: "3", label: "SAS Lefèvre – Rénovation pondeuses",  type: "Rénovation",   espece: "Poule pondeuse",   nb_places: "30 000", surface: "1 600" },
-  { id: "4", label: "GAEC du Bocage – Neuf dinde",         type: "Neuf",         espece: "Dinde",            nb_places: "8 000",  surface: "900"   },
-  { id: "5", label: "Ferme Dupont – Remplacement",         type: "Remplacement", espece: "Poulet chair",     nb_places: "18 000", surface: "1 000" },
-  { id: "6", label: "Coopérative Arvor – Extension canard",type: "Extension",    espece: "Canard",           nb_places: "6 000",  surface: "500"   },
-]
-
-// ─── Mock data fournisseur 1 ──────────────────────────────────────────────────
-
-const DATA_1 = {
-  nom: "Big Dutchman France", categorie: "Abreuvement / Alimentation",
-  site_web: "www.bigdutchman.fr", adresse: "ZI Le Gros Chêne, 35220 Châteaubourg",
-  statut: "actif" as const, note: 4,
-  commentaire: "Fournisseur principal pour lignes d'abreuvement nipple. Excellent SAV, pièces disponibles rapidement. Prix dans la moyenne haute mais qualité irréprochable. Interlocuteur Pierre très réactif.",
-  remise: "8", delai_paiement: "45j", min_commande: "500", zone_geo: "Grand Ouest + Bretagne",
-  certifications: "ISO 9001, agrément bâtiment avicole",
-  obs_tarifaires: "Remise 8% dès 2 000 € HT. Négociable à 10% sur gros chantiers > 15 k€.",
-  canal_devis: "Email", email_devis: "devis@bigdutchman.fr",
-  delai_reponse: "48h", format_reponse: "PDF", interlocuteur_devis: "1",
-  infos_opt: "Joindre photos de l'existant si rénovation. Préciser le type de bâtiment (tunnel / conventionnel).",
-  procedure: "Appeler Pierre avant envoi pour confirmer disponibilité et préparer le bon de commande. Joindre le plan de masse si disponible.",
-  template: `Objet : Demande de devis — [AFFAIRE] — [TYPE PROJET]
-
-Bonjour Pierre,
-
-Suite à notre échange, je vous adresse ci-dessous une demande de chiffrage pour un nouveau projet.
-
-CLIENT : [NOM STRUCTURE]
-TYPE : [NEUF / RÉNOVATION / EXTENSION]
-ESPÈCE : [ESPÈCE]
-CAPACITÉ : [NB PLACES] places
-SURFACE BÂTIMENT : [SURFACE] m²
-LOCALISATION : [COMMUNE, DÉPARTEMENT]
-
-Équipements souhaités :
-- Lignes d'abreuvement nipple : [NB LIGNES] lignes × [LONGUEUR] m
-- [AUTRES ÉQUIPEMENTS À PRÉCISER]
-
-Date souhaitée de démarrage : [DATE]
-
-Merci de transmettre votre offre en PDF avec prix unitaires et totaux HT, délai de livraison, conditions de garantie.
-
-Bien cordialement,
-Thibaud — MEB32`,
-}
-
-const CONTACTS_INIT: Contact[] = [
-  { id: 1, prenom: "Pierre",  nom: "Leclerc", fonction: "Commercial Grands Comptes", tel: "06 78 45 12 30", email: "p.leclerc@bigdutchman.fr",   notes: "Interlocuteur principal, dispo lun-ven 8h-17h", est_principal: true  },
-  { id: 2, prenom: "Anne",    nom: "Dubois",  fonction: "SAV Technique",              tel: "06 54 32 10 98", email: "a.dubois@bigdutchman.fr",    notes: "Pour urgences techniques et réclamations",      est_principal: false },
-]
-
-const PRODUITS_INIT: Produit[] = [
-  { id: 1, nom: "Ligne d'abreuvement nipple poulet", description: "Système nipple automatique avec régulateur de pression et tuyaux anti-algues",    prix_min: 1800, prix_max: 3200, delai: "3 semaines", points_forts: "Robustesse, durabilité 15 ans, faible entretien", points_faibles: "Prix plus élevé que la concurrence" },
-  { id: 2, nom: "Mangeoire chaîne automatique",       description: "Ligne d'alimentation chaîne acier galvanisé, moteur central 0.37 kW",             prix_min: 4500, prix_max: 7800, delai: "4 semaines", points_forts: "Capacité élevée, régulation précise, longue durée de vie", points_faibles: "Encombrement au sol, bruit moteur" },
-]
-
-const INFOS_OBLIG_INIT: InfoOblig[] = [
-  { id: 1, libelle: "Type de projet (neuf / réno / extension)", type: "texte",  obligatoire: true  },
-  { id: 2, libelle: "Nombre de places",                         type: "nombre", obligatoire: true  },
-  { id: 3, libelle: "Espèce élevée",                            type: "texte",  obligatoire: true  },
-  { id: 4, libelle: "Longueur du bâtiment (m)",                 type: "nombre", obligatoire: true  },
-  { id: 5, libelle: "Plan de masse si disponible",              type: "plan",   obligatoire: false },
-  { id: 6, libelle: "Date souhaitée d'installation",            type: "texte",  obligatoire: false },
-]
-
-const HISTORIQUE: Historique[] = [
-  { id: 1, date: "2026-02-10", affaire: "EARL Morin",            montant_demande: 48000, delai_reponse: 2,    montant_recu: 22500, statut: "reçu"      },
-  { id: 2, date: "2026-01-15", affaire: "Gauthier Volailles",    montant_demande: 32500, delai_reponse: 3,    montant_recu: 18200, statut: "reçu"      },
-  { id: 3, date: "2025-11-20", affaire: "Coopérative Arvor",     montant_demande: 53000, delai_reponse: null, montant_recu: null,  statut: "en_attente"},
-]
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -163,50 +94,42 @@ export default function FicheFournisseurPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
 
-  if (id !== "1") {
-    return (
-      <div className="flex min-h-screen">
-        <Sidebar />
-        <div className="flex-1 md:ml-60 flex flex-col">
-          <TopBar title="Fiche fournisseur" />
-          <div className="flex-1 flex items-center justify-center text-sm" style={{ color: "rgba(255,255,255,0.35)" }}>
-            Fournisseur #{id} non trouvé.{" "}
-            <button onClick={() => router.push("/fournisseurs")} className="ml-2 underline" style={{ color: "#a5b4fc" }}>
-              Retour à la liste
-            </button>
-          </div>
-        </div>
-      </div>
-    )
-  }
+  // ── Loading / error state ──────────────────────────────────────────────────
+  const [loading, setLoading]       = useState(true)
+  const [notFound, setNotFound]     = useState(false)
 
-  // ── State ─────────────────────────────────────────────────────────────────
-
-  const [nom, setNom]                         = useState(DATA_1.nom)
-  const [categorie, setCategorie]             = useState(DATA_1.categorie)
+  // ── Fournisseur fields ─────────────────────────────────────────────────────
+  const [nom, setNom]                         = useState("")
+  const [categorie, setCategorie]             = useState("")
   const [customCat, setCustomCat]             = useState("")
-  const [siteWeb, setSiteWeb]                 = useState(DATA_1.site_web)
-  const [adresse, setAdresse]                 = useState(DATA_1.adresse)
-  const [statut, setStatut]                   = useState<keyof typeof STATUT_CONFIG>(DATA_1.statut)
-  const [note, setNote]                       = useState(DATA_1.note)
-  const [commentaire, setCommentaire]         = useState(DATA_1.commentaire)
-  const [remise, setRemise]                   = useState(DATA_1.remise)
-  const [delaiPaiement, setDelaiPaiement]     = useState(DATA_1.delai_paiement)
-  const [minCommande, setMinCommande]         = useState(DATA_1.min_commande)
-  const [zoneGeo, setZoneGeo]                 = useState(DATA_1.zone_geo)
-  const [certifications, setCertifications]   = useState(DATA_1.certifications)
-  const [obsTarifaires, setObsTarifaires]     = useState(DATA_1.obs_tarifaires)
-  const [contacts, setContacts]               = useState<Contact[]>(CONTACTS_INIT)
-  const [produits, setProduits]               = useState<Produit[]>(PRODUITS_INIT)
-  const [canal, setCanal]                     = useState(DATA_1.canal_devis)
-  const [emailDevis, setEmailDevis]           = useState(DATA_1.email_devis)
-  const [delaiReponse, setDelaiReponse]       = useState(DATA_1.delai_reponse)
-  const [formatReponse, setFormatReponse]     = useState(DATA_1.format_reponse)
-  const [interlocDevis, setInterlocDevis]     = useState(DATA_1.interlocuteur_devis)
-  const [infosOblig, setInfosOblig]           = useState<InfoOblig[]>(INFOS_OBLIG_INIT)
-  const [infosOpt, setInfosOpt]               = useState(DATA_1.infos_opt)
-  const [procedure, setProcedure]             = useState(DATA_1.procedure)
-  const [templateEmail, setTemplateEmail]     = useState(DATA_1.template)
+  const [siteWeb, setSiteWeb]                 = useState("")
+  const [adresse, setAdresse]                 = useState("")
+  const [statut, setStatut]                   = useState<keyof typeof STATUT_CONFIG>("actif")
+  const [note, setNote]                       = useState(0)
+  const [commentaire, setCommentaire]         = useState("")
+  const [remise, setRemise]                   = useState("")
+  const [delaiPaiement, setDelaiPaiement]     = useState("30j")
+  const [minCommande, setMinCommande]         = useState("")
+  const [zoneGeo, setZoneGeo]                 = useState("")
+  const [certifications, setCertifications]   = useState("")
+  const [obsTarifaires, setObsTarifaires]     = useState("")
+  const [canal, setCanal]                     = useState("Email")
+  const [emailDevis, setEmailDevis]           = useState("")
+  const [delaiReponse, setDelaiReponse]       = useState("48h")
+  const [formatReponse, setFormatReponse]     = useState("PDF")
+  const [interlocDevis, setInterlocDevis]     = useState("")
+  const [infosOblig, setInfosOblig]           = useState<InfoOblig[]>([])
+  const [infosOpt, setInfosOpt]               = useState("")
+  const [procedure, setProcedure]             = useState("")
+  const [templateEmail, setTemplateEmail]     = useState("")
+
+  // ── Lists ──────────────────────────────────────────────────────────────────
+  const [contacts, setContacts]               = useState<Contact[]>([])
+  const [produits, setProduits]               = useState<Produit[]>([])
+  const [historique, setHistorique]           = useState<Historique[]>([])
+  const [affaires, setAffaires]               = useState<{ id: string; label: string }[]>([])
+
+  // ── UI state ───────────────────────────────────────────────────────────────
   const [openSections, setOpenSections]       = useState<number[]>([0, 1, 2, 3, 4, 5, 6])
   const [selectedAffaire, setSelectedAffaire] = useState("")
   const [loadingGen, setLoadingGen]           = useState(false)
@@ -215,26 +138,180 @@ export default function FicheFournisseurPage() {
   const [copied, setCopied]                   = useState(false)
   const [checklistState, setChecklistState]   = useState<boolean[]>([])
 
+  // ── Nouvelle demande modal ─────────────────────────────────────────────────
+  const [showDemandeModal, setShowDemandeModal] = useState(false)
+  const [demandeAffaire, setDemandeAffaire]     = useState("")
+  const [demandeDate, setDemandeDate]           = useState(new Date().toISOString().split("T")[0])
+  const [demandeMontant, setDemandeMontant]     = useState("")
+  const [savingDemande, setSavingDemande]       = useState(false)
+
+  // ── Fetch data on mount ────────────────────────────────────────────────────
+
+  useEffect(() => {
+    async function fetchAll() {
+      setLoading(true)
+      try {
+        const [
+          { data: fournisseur, error: fErr },
+          { data: contactsData },
+          { data: produitsData },
+          { data: historiqueData },
+          { data: affairesData },
+        ] = await Promise.all([
+          supabase.from("fournisseurs").select("*").eq("id", id).single(),
+          supabase.from("fournisseurs_contacts").select("*").eq("fournisseur_id", id),
+          supabase.from("fournisseurs_produits").select("*").eq("fournisseur_id", id),
+          supabase.from("demandes_devis_fournisseur").select("*").eq("fournisseur_id", id).order("created_at", { ascending: false }),
+          supabase.from("affaires").select("id, structure, type_projet, espece, nb_places").order("structure"),
+        ])
+
+        if (fErr || !fournisseur) {
+          setNotFound(true)
+          return
+        }
+
+        const f = fournisseur as Fournisseur
+        setNom(f.nom || "")
+        setCategorie(f.categorie || "")
+        setSiteWeb(f.site_web || "")
+        setAdresse(f.adresse || "")
+        setStatut((f.statut as keyof typeof STATUT_CONFIG) || "actif")
+        setNote(f.note_fiabilite || 0)
+        setCommentaire(f.commentaire || "")
+        setRemise(f.remise_habituelle != null ? String(f.remise_habituelle) : "")
+        setDelaiPaiement(f.delai_paiement || "30j")
+        setMinCommande(f.min_commande != null ? String(f.min_commande) : "")
+        setZoneGeo(f.zone_geo || "")
+        setCertifications(f.certifications || "")
+        setObsTarifaires(f.obs_tarifaires || "")
+        setCanal(f.canal_devis_prefere || "Email")
+        setEmailDevis(f.email_devis || "")
+        setDelaiReponse(f.delai_reponse_habituel || "48h")
+        setFormatReponse(f.format_reponse || "PDF")
+        setInfosOblig(Array.isArray(f.infos_obligatoires) ? f.infos_obligatoires : [])
+        setInfosOpt(f.infos_optionnelles || "")
+        setProcedure(f.procedure_speciale || "")
+        setTemplateEmail(f.template_email || "")
+
+        const mappedContacts: Contact[] = (contactsData as FournisseurContact[] || []).map(c => ({
+          id: c.id,
+          prenom: c.prenom || "",
+          nom: c.nom || "",
+          fonction: c.fonction || "",
+          tel: c.telephone || "",
+          email: c.email || "",
+          notes: c.notes || "",
+          est_principal: c.est_principal,
+        }))
+        setContacts(mappedContacts)
+        if (mappedContacts.length > 0) setInterlocDevis(mappedContacts[0].id)
+
+        setProduits((produitsData as FournisseurProduit[] || []).map(p => ({
+          id: p.id,
+          nom: p.nom || "",
+          description: p.description || "",
+          prix_min: p.prix_min || 0,
+          prix_max: p.prix_max || 0,
+          delai: p.delai_livraison || "",
+          points_forts: p.points_forts || "",
+          points_faibles: p.points_faibles || "",
+        })))
+
+        setHistorique((historiqueData as DemandeDevisFournisseur[] || []).map(h => ({
+          id: h.id,
+          date: h.date_envoi || h.created_at,
+          affaire: h.affaire_id || "",
+          montant_demande: h.montant_demande || 0,
+          delai_reponse: h.delai_reponse_reel || null,
+          montant_recu: h.montant_recu || null,
+          statut: (h.statut === "en_attente" ? "en_attente" : h.statut === "reçu" ? "reçu" : "refusé") as Historique["statut"],
+        })))
+
+        setAffaires((affairesData as Affaire[] || []).map(a => ({
+          id: a.id,
+          label: `${a.structure} – ${a.type_projet} ${a.nb_places}pl.`,
+        })))
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchAll()
+  }, [id])
+
   function toggleSection(i: number) {
     setOpenSections(p => p.includes(i) ? p.filter(n => n !== i) : [...p, i])
   }
 
+  // ── Save fournisseur ────────────────────────────────────────────────────────
+
+  async function saveFournisseur() {
+    await supabase.from("fournisseurs").update({
+      nom,
+      categorie: categorie === "__custom__" ? customCat : categorie,
+      site_web: siteWeb,
+      adresse,
+      statut,
+      note_fiabilite: note,
+      commentaire,
+      remise_habituelle: remise ? parseFloat(remise) : null,
+      delai_paiement: delaiPaiement,
+      min_commande: minCommande ? parseFloat(minCommande) : null,
+      zone_geo: zoneGeo,
+      certifications,
+      obs_tarifaires: obsTarifaires,
+      canal_devis_prefere: canal,
+      email_devis: emailDevis,
+      delai_reponse_habituel: delaiReponse,
+      infos_obligatoires: infosOblig,
+      infos_optionnelles: infosOpt,
+      format_reponse: formatReponse,
+      procedure_speciale: procedure,
+      template_email: templateEmail,
+    }).eq("id", id)
+  }
+
   // ── Contacts ────────────────────────────────────────────────────────────────
 
-  function addContact() {
-    setContacts(p => [...p, { id: Date.now(), prenom: "", nom: "", fonction: "", tel: "", email: "", notes: "", est_principal: false }])
+  async function addContact() {
+    const { data, error } = await supabase
+      .from("fournisseurs_contacts")
+      .insert({ fournisseur_id: id, prenom: "", nom: "", fonction: "", telephone: "", email: "", est_principal: false, notes: "" })
+      .select()
+      .single()
+    if (error || !data) return
+    const c = data as FournisseurContact
+    setContacts(p => [...p, { id: c.id, prenom: "", nom: "", fonction: "", tel: "", email: "", notes: "", est_principal: false }])
   }
-  function setContact(id: number, k: keyof Contact, v: string | boolean) {
-    setContacts(p => p.map(c => c.id === id ? { ...c, [k]: v } : c))
+
+  function setContact(contactId: string, k: keyof Contact, v: string | boolean) {
+    setContacts(p => p.map(c => c.id === contactId ? { ...c, [k]: v } : c))
+  }
+
+  async function deleteContact(contactId: string) {
+    await supabase.from("fournisseurs_contacts").delete().eq("id", contactId)
+    setContacts(p => p.filter(c => c.id !== contactId))
   }
 
   // ── Produits ────────────────────────────────────────────────────────────────
 
-  function addProduit() {
-    setProduits(p => [...p, { id: Date.now(), nom: "", description: "", prix_min: 0, prix_max: 0, delai: "", points_forts: "", points_faibles: "" }])
+  async function addProduit() {
+    const { data, error } = await supabase
+      .from("fournisseurs_produits")
+      .insert({ fournisseur_id: id, nom: "", description: "", prix_min: null, prix_max: null, delai_livraison: "", points_forts: "", points_faibles: "" })
+      .select()
+      .single()
+    if (error || !data) return
+    const p = data as FournisseurProduit
+    setProduits(prev => [...prev, { id: p.id, nom: "", description: "", prix_min: 0, prix_max: 0, delai: "", points_forts: "", points_faibles: "" }])
   }
-  function setProduit(id: number, k: keyof Produit, v: string | number) {
-    setProduits(p => p.map(pr => pr.id === id ? { ...pr, [k]: v } : pr))
+
+  function setProduit(produitId: string, k: keyof Produit, v: string | number) {
+    setProduits(p => p.map(pr => pr.id === produitId ? { ...pr, [k]: v } : pr))
+  }
+
+  async function deleteProduit(produitId: string) {
+    await supabase.from("fournisseurs_produits").delete().eq("id", produitId)
+    setProduits(p => p.filter(pr => pr.id !== produitId))
   }
 
   // ── Infos obligatoires ──────────────────────────────────────────────────────
@@ -242,17 +319,52 @@ export default function FicheFournisseurPage() {
   function addInfoOblig() {
     setInfosOblig(p => [...p, { id: Date.now(), libelle: "", type: "texte", obligatoire: true }])
   }
-  function setInfoOblig(id: number, k: keyof InfoOblig, v: string | boolean) {
-    setInfosOblig(p => p.map(i => i.id === id ? { ...i, [k]: v } : i))
+  function setInfoOblig(infoId: number, k: keyof InfoOblig, v: string | boolean) {
+    setInfosOblig(p => p.map(i => i.id === infoId ? { ...i, [k]: v } : i))
+  }
+
+  // ── Nouvelle demande devis ──────────────────────────────────────────────────
+
+  async function saveNouvelledemande() {
+    setSavingDemande(true)
+    const { data, error } = await supabase
+      .from("demandes_devis_fournisseur")
+      .insert({
+        fournisseur_id: id,
+        affaire_id: demandeAffaire || null,
+        date_envoi: demandeDate,
+        montant_demande: demandeMontant ? parseFloat(demandeMontant) : null,
+        statut: "en_attente",
+        email_objet: null,
+        email_corps: null,
+      })
+      .select()
+      .single()
+    setSavingDemande(false)
+    if (error || !data) return
+    const h = data as DemandeDevisFournisseur
+    setHistorique(p => [{
+      id: h.id,
+      date: h.date_envoi || h.created_at,
+      affaire: h.affaire_id || "",
+      montant_demande: h.montant_demande || 0,
+      delai_reponse: null,
+      montant_recu: null,
+      statut: "en_attente",
+    }, ...p])
+    setShowDemandeModal(false)
+    setDemandeAffaire("")
+    setDemandeDate(new Date().toISOString().split("T")[0])
+    setDemandeMontant("")
   }
 
   // ── Génération Claude ────────────────────────────────────────────────────────
 
   async function genererDemande() {
-    const aff = AFFAIRES.find(a => a.id === selectedAffaire)
+    const aff = affaires.find(a => a.id === selectedAffaire)
     if (!aff) return
     setLoadingGen(true)
-    const interlocNom = contacts.find(c => String(c.id) === interlocDevis)
+    const interlocNom = contacts.find(c => c.id === interlocDevis)
     const infosRequises = infosOblig.filter(i => i.obligatoire).map(i => `  - ${i.libelle} (${i.type})`).join("\n")
 
     const prompt = `Tu es assistant commercial en équipement avicole.
@@ -260,10 +372,6 @@ Génère une demande de devis pour le fournisseur ${nom}, catégorie ${categorie
 
 PROJET CLIENT :
 - Affaire : ${aff.label}
-- Type projet : ${aff.type}
-- Espèce : ${aff.espece}
-- Nombre de places : ${aff.nb_places}
-- Surface bâtiment : ${aff.surface} m²
 
 MÉTHODE DE CE FOURNISSEUR :
 - Canal préféré : ${canal}
@@ -329,9 +437,37 @@ Réponds UNIQUEMENT en JSON valide (pas de markdown) avec cette structure exacte
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const catBadge = CAT_CONFIG[categorie] || "bg-white/10 border border-white/20 text-white/50"
-
   // ── Render ────────────────────────────────────────────────────────────────
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen">
+        <Sidebar />
+        <div className="flex-1 md:ml-60 flex flex-col">
+          <TopBar title="Fiche fournisseur" />
+          <div className="flex-1 flex items-center justify-center">
+            <LoadingSpinner />
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (notFound) {
+    return (
+      <div className="flex min-h-screen">
+        <Sidebar />
+        <div className="flex-1 md:ml-60 flex flex-col">
+          <TopBar title="Fiche fournisseur" />
+          <div className="flex-1 flex items-center justify-center p-6">
+            <ErrorMessage message="Fournisseur introuvable" />
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const catBadge = CAT_CONFIG[categorie] || "bg-white/10 border border-white/20 text-white/50"
 
   return (
     <div className="flex min-h-screen">
@@ -361,11 +497,11 @@ Réponds UNIQUEMENT en JSON valide (pas de markdown) avec cette structure exacte
               <Section title="🏢 Informations générales" open={openSections.includes(0)} onToggle={() => toggleSection(0)}>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Field label="Nom société">
-                    <input className="input-glass" value={nom} onChange={e => setNom(e.target.value)} />
+                    <input className="input-glass" value={nom} onChange={e => setNom(e.target.value)} onBlur={saveFournisseur} />
                   </Field>
                   <div>
                     <Field label="Catégorie">
-                      <select className="select-glass w-full" value={categorie} onChange={e => setCategorie(e.target.value)}>
+                      <select className="select-glass w-full" value={categorie} onChange={e => { setCategorie(e.target.value); }}>
                         {CATEGORIES.map(c => <option key={c}>{c}</option>)}
                         <option value="__custom__">+ Créer une catégorie…</option>
                       </select>
@@ -381,16 +517,16 @@ Réponds UNIQUEMENT en JSON valide (pas de markdown) avec cette structure exacte
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Field label="Site web">
-                    <input className="input-glass" placeholder="www.example.fr" value={siteWeb} onChange={e => setSiteWeb(e.target.value)} />
+                    <input className="input-glass" placeholder="www.example.fr" value={siteWeb} onChange={e => setSiteWeb(e.target.value)} onBlur={saveFournisseur} />
                   </Field>
                   <Field label="Adresse / Région">
-                    <input className="input-glass" placeholder="Commune, département" value={adresse} onChange={e => setAdresse(e.target.value)} />
+                    <input className="input-glass" placeholder="Commune, département" value={adresse} onChange={e => setAdresse(e.target.value)} onBlur={saveFournisseur} />
                   </Field>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
                   <Field label="Statut">
-                    <select className="select-glass w-full" value={statut} onChange={e => setStatut(e.target.value as keyof typeof STATUT_CONFIG)}>
+                    <select className="select-glass w-full" value={statut} onChange={e => { setStatut(e.target.value as keyof typeof STATUT_CONFIG); saveFournisseur() }}>
                       {(Object.keys(STATUT_CONFIG) as (keyof typeof STATUT_CONFIG)[]).map(s => (
                         <option key={s} value={s}>{STATUT_CONFIG[s].label}</option>
                       ))}
@@ -400,12 +536,12 @@ Réponds UNIQUEMENT en JSON valide (pas de markdown) avec cette structure exacte
                     </span>
                   </Field>
                   <Field label="Note de fiabilité">
-                    <Stars note={note} onChange={setNote} />
+                    <Stars note={note} onChange={n => { setNote(n); saveFournisseur() }} />
                   </Field>
                 </div>
 
                 <Field label="Commentaire général">
-                  <textarea className="textarea-glass" rows={3} value={commentaire} onChange={e => setCommentaire(e.target.value)} />
+                  <textarea className="textarea-glass" rows={3} value={commentaire} onChange={e => setCommentaire(e.target.value)} onBlur={saveFournisseur} />
                 </Field>
               </Section>
 
@@ -435,7 +571,7 @@ Réponds UNIQUEMENT en JSON valide (pas de markdown) avec cette structure exacte
                           </span>
                         </div>
                         {idx > 0 && (
-                          <button type="button" onClick={() => setContacts(p => p.filter(ct => ct.id !== c.id))}
+                          <button type="button" onClick={() => deleteContact(c.id)}
                             className="p-1 rounded" style={{ color: "rgba(255,255,255,0.3)" }}
                             onMouseEnter={e => (e.currentTarget.style.background = "rgba(239,68,68,0.1)")}
                             onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
@@ -472,7 +608,7 @@ Réponds UNIQUEMENT en JSON valide (pas de markdown) avec cette structure exacte
                     <div key={p.id} className="p-4 rounded-xl space-y-3" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
                       <div className="flex items-center justify-between gap-2">
                         <input className="input-glass text-sm font-semibold flex-1" placeholder="Nom du produit" value={p.nom} onChange={e => setProduit(p.id, "nom", e.target.value)} />
-                        <button type="button" onClick={() => setProduits(pr => pr.filter(pp => pp.id !== p.id))}
+                        <button type="button" onClick={() => deleteProduit(p.id)}
                           className="p-1 rounded shrink-0" style={{ color: "rgba(255,255,255,0.3)" }}
                           onMouseEnter={e => (e.currentTarget.style.background = "rgba(239,68,68,0.1)")}
                           onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
@@ -508,25 +644,25 @@ Réponds UNIQUEMENT en JSON valide (pas de markdown) avec cette structure exacte
               <Section title="💶 Conditions commerciales" open={openSections.includes(3)} onToggle={() => toggleSection(3)}>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <Field label="Remise habituelle (%)">
-                    <input className="input-glass" type="number" value={remise} onChange={e => setRemise(e.target.value)} />
+                    <input className="input-glass" type="number" value={remise} onChange={e => setRemise(e.target.value)} onBlur={saveFournisseur} />
                   </Field>
                   <Field label="Délai de paiement">
-                    <select className="select-glass w-full" value={delaiPaiement} onChange={e => setDelaiPaiement(e.target.value)}>
+                    <select className="select-glass w-full" value={delaiPaiement} onChange={e => { setDelaiPaiement(e.target.value); saveFournisseur() }}>
                       {["Comptant", "30j", "45j", "60j"].map(v => <option key={v}>{v}</option>)}
                     </select>
                   </Field>
                   <Field label="Minimum commande (€)">
-                    <input className="input-glass" type="number" value={minCommande} onChange={e => setMinCommande(e.target.value)} />
+                    <input className="input-glass" type="number" value={minCommande} onChange={e => setMinCommande(e.target.value)} onBlur={saveFournisseur} />
                   </Field>
                   <Field label="Zone géo couverte">
-                    <input className="input-glass" value={zoneGeo} onChange={e => setZoneGeo(e.target.value)} />
+                    <input className="input-glass" value={zoneGeo} onChange={e => setZoneGeo(e.target.value)} onBlur={saveFournisseur} />
                   </Field>
                 </div>
                 <Field label="Certifications / agréments">
-                  <input className="input-glass" value={certifications} onChange={e => setCertifications(e.target.value)} />
+                  <input className="input-glass" value={certifications} onChange={e => setCertifications(e.target.value)} onBlur={saveFournisseur} />
                 </Field>
                 <Field label="Observations tarifaires">
-                  <textarea className="textarea-glass" rows={2} value={obsTarifaires} onChange={e => setObsTarifaires(e.target.value)} />
+                  <textarea className="textarea-glass" rows={2} value={obsTarifaires} onChange={e => setObsTarifaires(e.target.value)} onBlur={saveFournisseur} />
                 </Field>
               </Section>
             </div>
@@ -540,7 +676,7 @@ Réponds UNIQUEMENT en JSON valide (pas de markdown) avec cette structure exacte
                   <Field label="Canal préféré">
                     <div className="flex flex-wrap gap-1.5">
                       {["Email", "Téléphone", "Portail web", "PDF"].map(c => (
-                        <button key={c} type="button" onClick={() => setCanal(c)}
+                        <button key={c} type="button" onClick={() => { setCanal(c); saveFournisseur() }}
                           className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all ${
                             canal === c
                               ? "bg-indigo-500/30 border-indigo-500/50 text-indigo-200"
@@ -552,21 +688,21 @@ Réponds UNIQUEMENT en JSON valide (pas de markdown) avec cette structure exacte
                     </div>
                   </Field>
                   <Field label="Délai réponse habituel">
-                    <select className="select-glass w-full" value={delaiReponse} onChange={e => setDelaiReponse(e.target.value)}>
+                    <select className="select-glass w-full" value={delaiReponse} onChange={e => { setDelaiReponse(e.target.value); saveFournisseur() }}>
                       {["24h", "48h", "1 semaine", "2 semaines", "+2 semaines"].map(v => <option key={v}>{v}</option>)}
                     </select>
                   </Field>
                 </div>
 
                 <Field label="Email de contact devis">
-                  <input className="input-glass" type="email" value={emailDevis} onChange={e => setEmailDevis(e.target.value)} />
+                  <input className="input-glass" type="email" value={emailDevis} onChange={e => setEmailDevis(e.target.value)} onBlur={saveFournisseur} />
                 </Field>
 
                 <div className="grid grid-cols-2 gap-3">
                   <Field label="Format de réponse">
                     <div className="flex flex-wrap gap-1.5">
                       {["PDF", "Excel", "Appel", "Autre"].map(f => (
-                        <button key={f} type="button" onClick={() => setFormatReponse(f)}
+                        <button key={f} type="button" onClick={() => { setFormatReponse(f); saveFournisseur() }}
                           className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all ${
                             formatReponse === f
                               ? "bg-indigo-500/30 border-indigo-500/50 text-indigo-200"
@@ -581,7 +717,7 @@ Réponds UNIQUEMENT en JSON valide (pas de markdown) avec cette structure exacte
                     <select className="select-glass w-full" value={interlocDevis} onChange={e => setInterlocDevis(e.target.value)}>
                       <option value="">— Aucun —</option>
                       {contacts.map(c => (
-                        <option key={c.id} value={String(c.id)}>{c.prenom} {c.nom}</option>
+                        <option key={c.id} value={c.id}>{c.prenom} {c.nom}</option>
                       ))}
                     </select>
                   </Field>
@@ -635,13 +771,13 @@ Réponds UNIQUEMENT en JSON valide (pas de markdown) avec cette structure exacte
                 </div>
 
                 <Field label="Informations optionnelles utiles">
-                  <textarea className="textarea-glass" rows={2} value={infosOpt} onChange={e => setInfosOpt(e.target.value)} />
+                  <textarea className="textarea-glass" rows={2} value={infosOpt} onChange={e => setInfosOpt(e.target.value)} onBlur={saveFournisseur} />
                 </Field>
                 <Field label="Procédure spéciale">
-                  <textarea className="textarea-glass" rows={2} value={procedure} onChange={e => setProcedure(e.target.value)} />
+                  <textarea className="textarea-glass" rows={2} value={procedure} onChange={e => setProcedure(e.target.value)} onBlur={saveFournisseur} />
                 </Field>
                 <Field label="Template email habituel">
-                  <textarea className="textarea-glass font-mono text-xs" rows={10} value={templateEmail} onChange={e => setTemplateEmail(e.target.value)} />
+                  <textarea className="textarea-glass font-mono text-xs" rows={10} value={templateEmail} onChange={e => setTemplateEmail(e.target.value)} onBlur={saveFournisseur} />
                 </Field>
               </Section>
 
@@ -659,11 +795,13 @@ Réponds UNIQUEMENT en JSON valide (pas de markdown) avec cette structure exacte
                       </tr>
                     </thead>
                     <tbody>
-                      {HISTORIQUE.map(h => (
+                      {historique.map(h => (
                         <tr key={h.id}>
                           <td className="px-3 py-2.5 text-white/50">{new Date(h.date).toLocaleDateString("fr-FR")}</td>
-                          <td className="px-3 py-2.5 font-medium" style={{ color: "#f1f5f9" }}>{h.affaire}</td>
-                          <td className="px-3 py-2.5 text-right" style={{ color: "#10b981" }}>{fmt(h.montant_demande)}</td>
+                          <td className="px-3 py-2.5 font-medium" style={{ color: "#f1f5f9" }}>
+                            {affaires.find(a => a.id === h.affaire)?.label || h.affaire || "—"}
+                          </td>
+                          <td className="px-3 py-2.5 text-right" style={{ color: "#10b981" }}>{h.montant_demande ? fmt(h.montant_demande) : "—"}</td>
                           <td className="px-3 py-2.5 text-right hidden sm:table-cell" style={{ color: h.montant_recu ? "#10b981" : "rgba(255,255,255,0.25)" }}>
                             {h.montant_recu ? fmt(h.montant_recu) : "—"}
                           </td>
@@ -682,6 +820,7 @@ Réponds UNIQUEMENT en JSON valide (pas de markdown) avec cette structure exacte
                   </table>
                 </div>
                 <button type="button"
+                  onClick={() => setShowDemandeModal(true)}
                   className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-medium transition-all"
                   style={{ background: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.5)", border: "1px solid rgba(255,255,255,0.1)" }}
                   onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.08)")}
@@ -695,7 +834,7 @@ Réponds UNIQUEMENT en JSON valide (pas de markdown) avec cette structure exacte
                 <Field label="Affaire concernée">
                   <select className="select-glass w-full" value={selectedAffaire} onChange={e => setSelectedAffaire(e.target.value)}>
                     <option value="">Sélectionner une affaire…</option>
-                    {AFFAIRES.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}
+                    {affaires.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}
                   </select>
                 </Field>
                 <button
@@ -717,6 +856,44 @@ Réponds UNIQUEMENT en JSON valide (pas de markdown) avec cette structure exacte
         </main>
       </div>
 
+      {/* ══ MODALE NOUVELLE DEMANDE ══ */}
+      {showDemandeModal && (
+        <>
+          <div className="modal-overlay" onClick={() => setShowDemandeModal(false)} />
+          <div className="modal-box fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md z-50 p-6 space-y-4">
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="font-semibold text-sm" style={{ color: "#f1f5f9" }}>Nouvelle demande de devis</h2>
+              <button onClick={() => setShowDemandeModal(false)} className="p-1.5 rounded-lg"
+                style={{ color: "rgba(255,255,255,0.5)" }}
+                onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.08)")}
+                onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
+                <X size={16} />
+              </button>
+            </div>
+            <Field label="Affaire liée">
+              <select className="select-glass w-full" value={demandeAffaire} onChange={e => setDemandeAffaire(e.target.value)}>
+                <option value="">Sélectionner une affaire…</option>
+                {affaires.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}
+              </select>
+            </Field>
+            <Field label="Date d'envoi">
+              <input className="input-glass" type="date" value={demandeDate} onChange={e => setDemandeDate(e.target.value)} />
+            </Field>
+            <Field label="Montant demandé (€)">
+              <input className="input-glass" type="number" placeholder="ex: 25000" value={demandeMontant} onChange={e => setDemandeMontant(e.target.value)} />
+            </Field>
+            <button
+              type="button"
+              onClick={saveNouvelledemande}
+              disabled={savingDemande}
+              className="w-full py-2.5 rounded-xl text-sm font-bold transition-all"
+              style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6)", color: "#fff" }}>
+              {savingDemande ? "Enregistrement…" : "Enregistrer la demande"}
+            </button>
+          </div>
+        </>
+      )}
+
       {/* ══ PANEL RÉSULTAT CLAUDE ══ */}
       {promptResult && (
         <>
@@ -727,7 +904,7 @@ Réponds UNIQUEMENT en JSON valide (pas de markdown) avec cette structure exacte
             <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
               <div>
                 <h2 className="font-semibold text-[#f1f5f9] text-sm">Demande de devis générée</h2>
-                <p className="text-xs text-white/35 mt-0.5">{nom} — {AFFAIRES.find(a => a.id === selectedAffaire)?.label}</p>
+                <p className="text-xs text-white/35 mt-0.5">{nom} — {affaires.find(a => a.id === selectedAffaire)?.label}</p>
               </div>
               <button onClick={() => setPromptResult(null)} className="p-1.5 rounded-lg"
                 style={{ color: "rgba(255,255,255,0.5)" }}

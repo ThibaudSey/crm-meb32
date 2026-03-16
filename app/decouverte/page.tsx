@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import {
   ChevronDown, ChevronUp, Plus, X, AlertTriangle,
   CheckSquare, Square, Copy, Check, Save, Camera,
@@ -8,6 +8,8 @@ import {
 } from "lucide-react"
 import Sidebar from "@/components/Sidebar"
 import TopBar from "@/components/TopBar"
+import { supabase } from "@/lib/supabase"
+import type { Affaire } from "@/lib/types"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -33,19 +35,6 @@ interface BilanData {
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-
-const AFFAIRES = [
-  { id: "1",  label: "EARL Morin – Neuf 22 000 pl." },
-  { id: "2",  label: "Gauthier Volailles – Extension" },
-  { id: "3",  label: "SAS Lefèvre Avicole – Rénovation" },
-  { id: "4",  label: "GAEC du Bocage – Neuf dinde" },
-  { id: "5",  label: "Ferme Dupont – Remplacement" },
-  { id: "6",  label: "Coopérative Arvor – Extension canard" },
-  { id: "7",  label: "SCEA Bretagne Plumes – Neuf bio" },
-  { id: "8",  label: "Élevages Martin – Rénovation" },
-  { id: "9",  label: "EARL Renard & Fils – Neuf dinde" },
-  { id: "10", label: "GFA des Charentes – Extension canard" },
-]
 
 const SONCAS_CONFIG = [
   { key: "Sécurité",  icon: "🔒", desc: "Veut être rassuré, références, SAV",         active: "bg-blue-500/30 border-blue-500/50 text-blue-200",     inactive: "border-blue-500/20 text-blue-400/60 hover:bg-blue-500/10"     },
@@ -177,6 +166,23 @@ function Section({ title, open, onToggle, children }: {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function DecouvertePage() {
+  const [affaires, setAffaires] = useState<{ id: string; label: string }[]>([])
+
+  useEffect(() => {
+    supabase
+      .from("affaires")
+      .select("id, structure, type_projet, espece, nb_places")
+      .order("structure")
+      .then(({ data }) => {
+        if (data) {
+          setAffaires((data as Affaire[]).map(a => ({
+            id: a.id,
+            label: `${a.structure} – ${a.type_projet} ${a.nb_places || ""} pl.`,
+          })))
+        }
+      })
+  }, [])
+
   const [selectedAffaire, setSelectedAffaire] = useState("")
   const [dateRdv, setDateRdv] = useState(new Date().toISOString().split("T")[0])
   const [openSections, setOpenSections] = useState<number[]>([0, 1, 2, 3, 4, 5, 6, 7])
@@ -236,7 +242,7 @@ export default function DecouvertePage() {
   // ── Build prompt ─────────────────────────────────────────────────────────────
 
   function buildPrompt(): string {
-    const affaireLabel = AFFAIRES.find(a => a.id === selectedAffaire)?.label || "non précisée"
+    const affaireLabel = affaires.find(a => a.id === selectedAffaire)?.label || "non précisée"
     const srcFin = form.sources_financement.join(", ") || "non précisé"
     const soncas = form.soncas_actifs.join(", ") || "non renseigné"
     const concurrentsText = concurrents.length
@@ -374,7 +380,7 @@ Génère un bilan R1 complet. Réponds UNIQUEMENT avec un objet JSON valide (pas
 
   async function copierBilan() {
     if (!bilan) return
-    const affaireLabel = AFFAIRES.find(a => a.id === selectedAffaire)?.label || "?"
+    const affaireLabel = affaires.find(a => a.id === selectedAffaire)?.label || "?"
     const text = `BILAN R1 — ${affaireLabel} (${new Date(dateRdv).toLocaleDateString("fr-FR")})
 
 SYNTHÈSE
@@ -402,7 +408,7 @@ ${bilan.questions_restantes.map(q => `• ${q}`).join("\n")}`
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const affaireLabel = AFFAIRES.find(a => a.id === selectedAffaire)?.label || "—"
+  const affaireLabel = affaires.find(a => a.id === selectedAffaire)?.label || "—"
 
   // ─────────────────────────────────────────────────────────────────────────────
   // RENDER
@@ -430,7 +436,7 @@ ${bilan.questions_restantes.map(q => `• ${q}`).join("\n")}`
                   className="select-glass w-full"
                 >
                   <option value="">Sélectionner une affaire…</option>
-                  {AFFAIRES.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}
+                  {affaires.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}
                 </select>
               </div>
               <div>

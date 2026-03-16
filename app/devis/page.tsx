@@ -1,38 +1,19 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Plus, AlertTriangle, ChevronRight, Download } from "lucide-react"
 import Sidebar from "@/components/Sidebar"
 import TopBar from "@/components/TopBar"
+import LoadingSpinner from "@/components/LoadingSpinner"
+import ErrorMessage from "@/components/ErrorMessage"
+import { supabase } from "@/lib/supabase"
+import type { Devis } from "@/lib/types"
 import { exportToCSV, fmtDateExport } from "@/lib/export"
 
-// ─── Types & données ──────────────────────────────────────────────────────────
+// ─── Types locaux ─────────────────────────────────────────────────────────────
 
 type Statut = "brouillon" | "envoye" | "accepte" | "refuse" | "expire"
-
-interface Devis {
-  id: number
-  ref: string
-  client: string
-  typeProjet: string
-  totalHT: number
-  marge: number
-  statut: Statut
-  dateEnvoi: string | null
-  affaireId: number | null
-  concurrent?: string
-}
-
-const DEVIS: Devis[] = [
-  { id: 1, ref: "DEV-2026-001", client: "EARL Morin",          typeProjet: "Neuf",         totalHT: 48000, marge: 34, statut: "envoye",   dateEnvoi: "2026-03-06", affaireId: 1, concurrent: "Bâtivolaille"  },
-  { id: 2, ref: "DEV-2026-002", client: "Gauthier Volailles",  typeProjet: "Extension",    totalHT: 32500, marge: 31, statut: "envoye",   dateEnvoi: "2026-03-07", affaireId: 2, concurrent: undefined         },
-  { id: 3, ref: "DEV-2026-003", client: "SAS Lefèvre Avicole", typeProjet: "Rénovation",   totalHT: 21000, marge: 38, statut: "accepte",  dateEnvoi: "2026-02-20", affaireId: 3                               },
-  { id: 4, ref: "DEV-2026-004", client: "GAEC du Bocage",      typeProjet: "Neuf",         totalHT: 67000, marge: 36, statut: "brouillon",dateEnvoi: null,          affaireId: 4                               },
-  { id: 5, ref: "DEV-2026-005", client: "Coopérative Arvor",   typeProjet: "Extension",    totalHT: 53000, marge: 33, statut: "envoye",   dateEnvoi: "2026-03-12", affaireId: 6                               },
-  { id: 6, ref: "DEV-2026-006", client: "Élevages Martin",     typeProjet: "Rénovation",   totalHT: 27500, marge: 30, statut: "refuse",   dateEnvoi: "2026-02-28", affaireId: 8, concurrent: "Volaferm"        },
-  { id: 7, ref: "DEV-2026-007", client: "Ferme Dupont",        typeProjet: "Remplacement", totalHT: 14200, marge: 22, statut: "expire",   dateEnvoi: "2026-02-01", affaireId: 5                               },
-  { id: 8, ref: "DEV-2026-008", client: "SCEA Bretagne Plumes",typeProjet: "Neuf",         totalHT: 89000, marge: 40, statut: "brouillon",dateEnvoi: null,          affaireId: 7                               },
-]
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -43,46 +24,6 @@ function joursSansRetour(dateEnvoi: string | null): number | null {
 
 function fmt(n: number) {
   return new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 }).format(n) + " €"
-}
-
-function exportDevis() {
-  const today = Date.now()
-  exportToCSV(
-    DEVIS.map(d => {
-      const margeEur   = Math.round(d.totalHT * d.marge / 100)
-      const coutRevient = d.totalHT - margeEur
-      const jours = d.dateEnvoi
-        ? Math.floor((today - new Date(d.dateEnvoi).getTime()) / 86400000)
-        : null
-      return {
-        ref:          d.ref,
-        client:       d.client,
-        typeProjet:   d.typeProjet,
-        totalHT:      d.totalHT,
-        coutRevient,
-        margeEur,
-        margePct:     d.marge,
-        statut:       d.statut,
-        dateCreation: "",
-        dateEnvoi:    fmtDateExport(d.dateEnvoi),
-        jours:        jours ?? "",
-      }
-    }),
-    `devis-MEB32-${new Date().toISOString().slice(0, 7)}.csv`,
-    [
-      { key: "ref",          label: "Référence"           },
-      { key: "client",       label: "Client"              },
-      { key: "typeProjet",   label: "Type projet"         },
-      { key: "totalHT",      label: "Total HT €"          },
-      { key: "coutRevient",  label: "Coût revient €"      },
-      { key: "margeEur",     label: "Marge €"             },
-      { key: "margePct",     label: "Marge %"             },
-      { key: "statut",       label: "Statut"              },
-      { key: "dateCreation", label: "Date création"       },
-      { key: "dateEnvoi",    label: "Date envoi"          },
-      { key: "jours",        label: "Jours sans retour"   },
-    ]
-  )
 }
 
 const STATUT_STYLE: Record<Statut, { badge: string; label: string }> = {
@@ -97,15 +38,103 @@ const STATUT_STYLE: Record<Statut, { badge: string; label: string }> = {
 
 export default function DevisPage() {
   const router = useRouter()
+  const [devis, setDevis] = useState<Devis[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  const devisAvecJours = DEVIS.map((d) => ({
+  useEffect(() => { fetchDevis() }, [])
+
+  async function fetchDevis() {
+    try {
+      setLoading(true)
+      setError(null)
+      const { data, error } = await supabase
+        .from("devis")
+        .select("*")
+        .order("created_at", { ascending: false })
+      if (error) throw error
+      setDevis(data || [])
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Erreur lors du chargement des devis")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const devisAvecJours = devis.map((d) => ({
     ...d,
-    jours: joursSansRetour(d.dateEnvoi),
+    jours: joursSansRetour(d.date_envoi),
   }))
 
   const devisARelancer = devisAvecJours.filter(
     (d) => d.statut === "envoye" && (d.jours ?? 0) > 7
   )
+
+  function exportDevisData() {
+    const today = Date.now()
+    exportToCSV(
+      devis.map((d) => {
+        const margeEur    = Math.round(d.total_ht * d.marge / 100)
+        const coutRevient = d.total_ht - margeEur
+        const jours = d.date_envoi
+          ? Math.floor((today - new Date(d.date_envoi).getTime()) / 86400000)
+          : null
+        return {
+          ref:          d.reference,
+          client:       d.client,
+          typeProjet:   d.type_projet,
+          totalHT:      d.total_ht,
+          coutRevient,
+          margeEur,
+          margePct:     d.marge,
+          statut:       d.statut,
+          dateCreation: "",
+          dateEnvoi:    fmtDateExport(d.date_envoi),
+          jours:        jours ?? "",
+        }
+      }),
+      `devis-MEB32-${new Date().toISOString().slice(0, 7)}.csv`,
+      [
+        { key: "ref",          label: "Référence"           },
+        { key: "client",       label: "Client"              },
+        { key: "typeProjet",   label: "Type projet"         },
+        { key: "totalHT",      label: "Total HT €"          },
+        { key: "coutRevient",  label: "Coût revient €"      },
+        { key: "margeEur",     label: "Marge €"             },
+        { key: "margePct",     label: "Marge %"             },
+        { key: "statut",       label: "Statut"              },
+        { key: "dateCreation", label: "Date création"       },
+        { key: "dateEnvoi",    label: "Date envoi"          },
+        { key: "jours",        label: "Jours sans retour"   },
+      ]
+    )
+  }
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen">
+        <Sidebar />
+        <div className="flex-1 md:ml-60 flex flex-col min-h-screen">
+          <TopBar title="Devis" />
+          <LoadingSpinner />
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex min-h-screen">
+        <Sidebar />
+        <div className="flex-1 md:ml-60 flex flex-col min-h-screen">
+          <TopBar title="Devis" />
+          <div className="flex-1 p-6">
+            <ErrorMessage message={error} onRetry={fetchDevis} />
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex min-h-screen">
@@ -114,7 +143,7 @@ export default function DevisPage() {
       <div className="flex-1 md:ml-60 flex flex-col min-h-screen">
         <TopBar title="Devis" actions={
           <button
-            onClick={exportDevis}
+            onClick={exportDevisData}
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all"
             style={{ background: "rgba(99,102,241,0.15)", border: "1px solid rgba(99,102,241,0.3)", color: "#a5b4fc" }}
             onMouseEnter={e => (e.currentTarget.style.background = "rgba(99,102,241,0.25)")}
@@ -140,7 +169,7 @@ export default function DevisPage() {
                       onClick={() => router.push(`/devis/${d.id}`)}
                       className="font-semibold underline underline-offset-2 hover:opacity-80 transition-opacity"
                     >
-                      {d.ref}
+                      {d.reference}
                     </button>{" "}
                     ({d.client}, J+{d.jours})
                     {i < devisARelancer.length - 1 ? ", " : ""}
@@ -155,7 +184,7 @@ export default function DevisPage() {
             <p className="text-sm" style={{ color: "rgba(255,255,255,0.4)" }}>
               {devisAvecJours.length} devis ·{" "}
               <span className="font-medium" style={{ color: "rgba(255,255,255,0.7)" }}>
-                {fmt(devisAvecJours.reduce((s, d) => s + d.totalHT, 0))} total HT
+                {fmt(devisAvecJours.reduce((s, d) => s + d.total_ht, 0))} total HT
               </span>
             </p>
             <button className="btn-primary rounded-xl flex items-center gap-2 text-sm font-semibold px-4 py-2.5">
@@ -169,6 +198,7 @@ export default function DevisPage() {
           <div className="md:hidden space-y-3">
             {devisAvecJours.map((d) => {
               const relance = d.statut === "envoye" && (d.jours ?? 0) > 7
+              const statutKey = d.statut as Statut
               return (
                 <div
                   key={d.id}
@@ -179,17 +209,17 @@ export default function DevisPage() {
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div>
                       <p className="font-bold text-sm" style={{ color: "#f1f5f9" }}>{d.client}</p>
-                      <p className="text-xs font-mono mt-0.5" style={{ color: "rgba(255,255,255,0.4)" }}>{d.ref}</p>
+                      <p className="text-xs font-mono mt-0.5" style={{ color: "rgba(255,255,255,0.4)" }}>{d.reference}</p>
                     </div>
                     <span className="text-base font-bold whitespace-nowrap" style={{ color: "#10b981" }}>
-                      {fmt(d.totalHT)}
+                      {fmt(d.total_ht)}
                     </span>
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium ${STATUT_STYLE[d.statut].badge}`}>
-                      {STATUT_STYLE[d.statut].label}
+                    <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium ${STATUT_STYLE[statutKey]?.badge ?? "bg-white/10 text-white/50"}`}>
+                      {STATUT_STYLE[statutKey]?.label ?? d.statut}
                     </span>
-                    <span className="text-xs" style={{ color: "rgba(255,255,255,0.45)" }}>{d.typeProjet}</span>
+                    <span className="text-xs" style={{ color: "rgba(255,255,255,0.45)" }}>{d.type_projet}</span>
                     <span className="text-xs font-semibold ml-auto" style={{
                       color: d.marge >= 32 ? "#10b981" : d.marge >= 25 ? "#f59e0b" : "#ef4444"
                     }}>
@@ -226,6 +256,7 @@ export default function DevisPage() {
                 <tbody>
                   {devisAvecJours.map((d) => {
                     const relance = d.statut === "envoye" && (d.jours ?? 0) > 7
+                    const statutKey = d.statut as Statut
                     return (
                       <tr
                         key={d.id}
@@ -234,12 +265,12 @@ export default function DevisPage() {
                         style={relance ? { background: "rgba(249,115,22,0.05)" } : undefined}
                       >
                         <td className="px-5 py-3.5">
-                          <span className="font-mono text-xs font-semibold" style={{ color: "#f1f5f9" }}>{d.ref}</span>
+                          <span className="font-mono text-xs font-semibold" style={{ color: "#f1f5f9" }}>{d.reference}</span>
                         </td>
                         <td className="px-4 py-3.5 font-medium" style={{ color: "#f1f5f9" }}>{d.client}</td>
-                        <td className="px-4 py-3.5 hidden sm:table-cell text-xs" style={{ color: "rgba(255,255,255,0.5)" }}>{d.typeProjet}</td>
+                        <td className="px-4 py-3.5 hidden sm:table-cell text-xs" style={{ color: "rgba(255,255,255,0.5)" }}>{d.type_projet}</td>
                         <td className="px-4 py-3.5 text-right font-bold whitespace-nowrap" style={{ color: "#10b981" }}>
-                          {fmt(d.totalHT)}
+                          {fmt(d.total_ht)}
                         </td>
                         <td className="px-4 py-3.5 text-right hidden md:table-cell">
                           <span className="font-semibold" style={{
@@ -250,8 +281,8 @@ export default function DevisPage() {
                         </td>
                         <td className="px-4 py-3.5">
                           <div className="flex items-center gap-1.5">
-                            <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium ${STATUT_STYLE[d.statut].badge}`}>
-                              {STATUT_STYLE[d.statut].label}
+                            <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium ${STATUT_STYLE[statutKey]?.badge ?? "bg-white/10 text-white/50"}`}>
+                              {STATUT_STYLE[statutKey]?.label ?? d.statut}
                             </span>
                             {relance && (
                               <span className="flex items-center gap-0.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-orange-500/20 border border-orange-500/40 text-orange-300">
@@ -261,8 +292,8 @@ export default function DevisPage() {
                           </div>
                         </td>
                         <td className="px-4 py-3.5 hidden lg:table-cell text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>
-                          {d.dateEnvoi
-                            ? new Date(d.dateEnvoi).toLocaleDateString("fr-FR")
+                          {d.date_envoi
+                            ? new Date(d.date_envoi).toLocaleDateString("fr-FR")
                             : <span style={{ color: "rgba(255,255,255,0.2)" }}>—</span>}
                         </td>
                         <td className="px-4 py-3.5 hidden lg:table-cell">

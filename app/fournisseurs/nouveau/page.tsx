@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { ArrowLeft, Save } from "lucide-react"
 import Sidebar from "@/components/Sidebar"
 import TopBar from "@/components/TopBar"
+import { supabase } from "@/lib/supabase"
 
 const CATEGORIES = [
   "Ventilation / Climatisation", "Chauffage / Éclairage", "Abreuvement / Alimentation",
@@ -53,12 +54,42 @@ export default function NouveauFournisseurPage() {
 
   function setF(k: string, v: string | number) { setForm(p => ({ ...p, [k]: v })) }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!form.nom) return
-    // In production: POST to Supabase
-    // For now: navigate to the detail page
-    router.push("/fournisseurs")
+
+    const { data: four } = await supabase
+      .from("fournisseurs")
+      .insert({
+        nom: form.nom,
+        categorie: form.categorie,
+        site_web: form.site_web || null,
+        adresse: form.adresse || null,
+        statut: form.statut,
+        note_fiabilite: form.note,
+        commentaire: form.commentaire || null,
+        canal_devis_prefere: form.canal_devis,
+        email_devis: form.email_devis || null,
+        delai_reponse_habituel: form.delai_reponse || null,
+        procedure_speciale: form.procedure || null,
+        infos_obligatoires: [],
+      })
+      .select("id")
+      .single()
+
+    if (four?.id && (form.contact_nom || form.contact_prenom)) {
+      await supabase.from("fournisseurs_contacts").insert({
+        fournisseur_id: four.id,
+        prenom: form.contact_prenom || null,
+        nom: form.contact_nom || null,
+        fonction: form.contact_fonction || null,
+        telephone: form.contact_tel || null,
+        email: form.contact_email || null,
+        est_principal: true,
+      })
+    }
+
+    router.push(four?.id ? `/fournisseurs/${four.id}` : "/fournisseurs")
   }
 
   return (

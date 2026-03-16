@@ -1,71 +1,26 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useParams, useRouter } from "next/navigation"
 import {
   ArrowLeft, Pencil, Plus, X, Copy, Check,
-  CheckSquare, Square, AlertCircle, Phone, MapPin, Calendar,
+  CheckSquare, Square, AlertCircle,
 } from "lucide-react"
 import Sidebar from "@/components/Sidebar"
 import TopBar from "@/components/TopBar"
+import LoadingSpinner from "@/components/LoadingSpinner"
+import ErrorMessage from "@/components/ErrorMessage"
+import { supabase } from "@/lib/supabase"
+import type { Affaire, PartiePrenante, HistoriqueNote, Todo } from "@/lib/types"
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── Local aliases ─────────────────────────────────────────────────────────────
 
 type Influence = "Fort" | "Moyen" | "Faible"
 type NoteType  = "RDV" | "Visite" | "Appel"
 type TodoCat   = "Relance" | "Admin" | "Technique" | "Urgence"
-
-interface Prenante  { id: number; nom: string; role: string; influence: Influence }
-interface Todo      { id: number; texte: string; date: string; fait: boolean; categorie: TodoCat; urgent: boolean }
-interface Note      { id: number; type: NoteType; date: string; contenu: string; structure?: string }
 interface PromptPanel { titre: string; contenu: string }
 
-// ─── Données EARL Morin (id=1) ────────────────────────────────────────────────
-
-const AFFAIRE_1 = {
-  id: 1,
-  structure:   "EARL Morin",
-  typeProjet:  "Neuf",
-  espece:      "Poulet chair",
-  nbPlaces:    22000,
-  montant:     48000,
-  marge:       34,
-  etape:       "R2 Proposition",
-  typeInter:   "Éleveur",
-  dateDecision:"2026-04-15",
-  concurrent:  "Bâtivolaille",
-  notesConcurrence: "Bâtivolaille propose un bâtiment standard moins cher (~42 k€) mais sans gestion d'ambiance connectée ni garantie 10 ans sur charpente. Notre point fort : système d'abreuvement nipple intégré et ventilation dynamique.",
-}
-
-const PRENANTES_INIT: Prenante[] = [
-  { id: 1, nom: "Jean-Pierre Morin", role: "Gérant – décideur final",    influence: "Fort"  },
-  { id: 2, nom: "Marie Morin",       role: "Conjointe – DAF de l'EARL",  influence: "Moyen" },
-  { id: 3, nom: "Cédric Vasseur",    role: "Conseiller coopérative",     influence: "Moyen" },
-  { id: 4, nom: "Banque Crédit Agri",role: "Financement projet",         influence: "Fort"  },
-]
-
-const TODOS_INIT: Todo[] = [
-  { id: 1, texte: "Appeler Jean-Pierre pour suivi devis J+9",          date: "2026-03-16", fait: false, categorie: "Relance",   urgent: true  },
-  { id: 2, texte: "Envoyer plan masse bâtiment 22 000 places",         date: "2026-03-18", fait: false, categorie: "Technique", urgent: false },
-  { id: 3, texte: "Préparer simulation financement avec CA",           date: "2026-03-20", fait: false, categorie: "Admin",     urgent: false },
-  { id: 4, texte: "Visite de site EARL Morin – voir orientation bât.", date: "2026-03-25", fait: false, categorie: "Technique", urgent: false },
-  { id: 5, texte: "Récupérer référence chantier similaire 20 000 pl.", date: "2026-03-14", fait: true,  categorie: "Admin",     urgent: false },
-]
-
-const NOTES_INIT: Note[] = [
-  {
-    id: 1, type: "Appel", date: "2026-03-06",
-    contenu: "JP Morin demande à comparer avec Bâtivolaille. Dit que leur offre est moins chère de ~6 k€. Semble sensible au prix mais insiste sur la durabilité. Marie est plus convaincue par nos arguments qualité.",
-  },
-  {
-    id: 2, type: "Visite", date: "2026-02-18",
-    contenu: "Première visite terrain. Bâtiment à implanter sur une parcelle argileuse – prévoir fondations renforcées (+2 à 3 k€). JP Morin très intéressé par la gestion d'ambiance connectée. 2 anciens bâtiments vétustes à démolir (hors périmètre).",
-  },
-  {
-    id: 3, type: "RDV", date: "2026-01-30",
-    contenu: "R1 Découverte réalisée. Projet validé : 1 bâtiment neuf poulet chair 22 000 places, label Rouge possible à terme. Budget annoncé entre 40 et 55 k€. Concurrent : Bâtivolaille déjà venu sur site.",
-  },
-]
+// ─── Static config ─────────────────────────────────────────────────────────────
 
 const SONCAS_CONFIG = [
   { key: "Sécurité",  active: "bg-blue-500/30 text-blue-200 border-blue-500/50",   inactive: "border-blue-500/20 text-blue-400/60 hover:bg-blue-500/10"   },
@@ -76,19 +31,19 @@ const SONCAS_CONFIG = [
   { key: "Sympathie", active: "bg-pink-500/30 text-pink-200 border-pink-500/50",   inactive: "border-pink-500/20 text-pink-400/60 hover:bg-pink-500/10"   },
 ]
 
-const INFLUENCE_STYLE: Record<Influence, string> = {
+const INFLUENCE_STYLE: Record<string, string> = {
   Fort:   "bg-emerald-500/20 border border-emerald-500/40 text-emerald-300",
   Moyen:  "bg-amber-500/20 border border-amber-500/40 text-amber-300",
   Faible: "bg-white/10 border border-white/20 text-white/60",
 }
 
-const NOTE_TYPE_STYLE: Record<NoteType, { dot: string; badge: string }> = {
+const NOTE_TYPE_STYLE: Record<string, { dot: string; badge: string }> = {
   RDV:    { dot: "bg-blue-500",   badge: "bg-indigo-500/20 border border-indigo-500/40 text-indigo-300" },
   Visite: { dot: "bg-emerald-500",badge: "bg-emerald-500/20 border border-emerald-500/40 text-emerald-300" },
   Appel:  { dot: "bg-amber-500",  badge: "bg-amber-500/20 border border-amber-500/40 text-amber-300" },
 }
 
-const TODO_CAT_STYLE: Record<TodoCat, string> = {
+const TODO_CAT_STYLE: Record<string, string> = {
   Relance:   "bg-red-500/20 border border-red-500/40 text-red-300",
   Admin:     "bg-white/10 border border-white/20 text-white/50",
   Technique: "bg-indigo-500/20 border border-indigo-500/40 text-indigo-300",
@@ -105,16 +60,16 @@ function isDepasse(date: string) {
 
 // ─── Prompts IA ───────────────────────────────────────────────────────────────
 
-function buildPrompts(a: typeof AFFAIRE_1, soncasActifs: string[]) {
+function buildPrompts(a: Affaire, soncasActifs: string[]) {
   const soncas = soncasActifs.length ? soncasActifs.join(", ") : "non renseigné"
   return {
     r1: `Tu es un commercial spécialisé en équipement d'élevage avicole.
 Je prépare ma première visite (R1 Découverte) chez ${a.structure}.
 
 Profil du client :
-- Type : ${a.typeInter}
-- Projet : ${a.typeProjet} de bâtiment ${a.espece}
-- Capacité estimée : ${a.nbPlaces.toLocaleString("fr-FR")} places
+- Type : ${a.type_inter}
+- Projet : ${a.type_projet} de bâtiment ${a.espece}
+- Capacité estimée : ${a.nb_places.toLocaleString("fr-FR")} places
 - Concurrent identifié : ${a.concurrent ?? "inconnu"}
 
 Génère pour moi :
@@ -126,8 +81,8 @@ Génère pour moi :
     r2: `Tu es un expert commercial en équipement avicole.
 Je prépare ma proposition commerciale (R2) pour ${a.structure}.
 
-Projet : ${a.typeProjet} ${a.espece}, ${a.nbPlaces.toLocaleString("fr-FR")} places
-Budget estimé : ${fmt(a.montant)}
+Projet : ${a.type_projet} ${a.espece}, ${a.nb_places.toLocaleString("fr-FR")} places
+Budget estimé : ${fmt(a.montant_estime)}
 Concurrent : ${a.concurrent ?? "inconnu"}
 Profil SONCAS activé : ${soncas}
 
@@ -137,7 +92,7 @@ Génère :
 3. Les questions de confirmation de valeur à poser avant d'annoncer le prix
 4. Le wording recommandé pour l'annonce du prix en ancrant la valeur`,
 
-    prix: `Un client (${a.structure}) en négociation pour un projet ${a.typeProjet} ${a.espece} (${a.nbPlaces.toLocaleString("fr-FR")} places) me dit que notre offre à ${fmt(a.montant)} est trop chère par rapport à ${a.concurrent ?? "la concurrence"}.
+    prix: `Un client (${a.structure}) en négociation pour un projet ${a.type_projet} ${a.espece} (${a.nb_places.toLocaleString("fr-FR")} places) me dit que notre offre à ${fmt(a.montant_estime)} est trop chère par rapport à ${a.concurrent ?? "la concurrence"}.
 
 Profil SONCAS activé : ${soncas}
 
@@ -155,30 +110,22 @@ export default function AffaireDetailPage() {
   const { id } = useParams<{ id: string }>()
   const router  = useRouter()
 
-  if (id !== "1") {
-    return (
-      <div className="flex min-h-screen">
-        <Sidebar />
-        <div className="flex-1 md:ml-60 flex flex-col">
-          <TopBar title="Fiche affaire" />
-          <div className="flex-1 flex items-center justify-center text-sm" style={{ color: "rgba(255,255,255,0.35)" }}>
-            Affaire #{id} non trouvée.
-          </div>
-        </div>
-      </div>
-    )
-  }
+  // ── Remote state ─────────────────────────────────────────────────────────────
+  const [loading, setLoading]             = useState(true)
+  const [error, setError]                 = useState<string | null>(null)
+  const [affaire, setAffaire]             = useState<Affaire | null>(null)
+  const [prenantes, setPrenantes]         = useState<PartiePrenante[]>([])
+  const [todos, setTodos]                 = useState<Todo[]>([])
+  const [notes, setNotes]                 = useState<HistoriqueNote[]>([])
 
-  const affaire = AFFAIRE_1
-
-  // ── State ────────────────────────────────────────────────────────────────────
-  const [prenantes, setPrenantes]         = useState<Prenante[]>(PRENANTES_INIT)
-  const [todos, setTodos]                 = useState<Todo[]>(TODOS_INIT)
-  const [notes, setNotes]                 = useState<Note[]>(NOTES_INIT)
-  const [soncasActifs, setSoncasActifs]   = useState<string[]>(["Sécurité", "Argent"])
+  // ── UI state ─────────────────────────────────────────────────────────────────
+  const [soncasActifs, setSoncasActifs]   = useState<string[]>([])
   const [promptPanel, setPromptPanel]     = useState<PromptPanel | null>(null)
   const [copied, setCopied]               = useState(false)
-  const [notesConcurrence, setNotesConcurrence] = useState(affaire.notesConcurrence)
+  const [notesConcurrence, setNotesConcurrence] = useState("")
+  const [concurrentValue, setConcurrentValue]   = useState("")
+
+  const [editMode, setEditMode]           = useState(false)
 
   const [showAddTodo, setShowAddTodo]     = useState(false)
   const [newTodoTexte, setNewTodoTexte]   = useState("")
@@ -193,7 +140,46 @@ export default function AffaireDetailPage() {
   const [showAddPrenante, setShowAddPrenante] = useState(false)
   const [newPrenante, setNewPrenante]     = useState({ nom: "", role: "", influence: "Moyen" as Influence })
 
-  const prompts = buildPrompts(affaire, soncasActifs)
+  // ── Fetch ─────────────────────────────────────────────────────────────────────
+
+  const fetchAll = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const [affaireRes, prenantesRes, todosRes, notesRes] = await Promise.all([
+        supabase.from("affaires").select("*").eq("id", id).single(),
+        supabase.from("parties_prenantes").select("*").eq("affaire_id", id),
+        supabase.from("todos").select("*").eq("affaire_id", id).order("date_limite"),
+        supabase.from("historique_notes").select("*").eq("affaire_id", id).order("date", { ascending: false }),
+      ])
+
+      if (affaireRes.error || !affaireRes.data) {
+        setError("Affaire introuvable")
+        return
+      }
+
+      const a = affaireRes.data as Affaire
+      setAffaire(a)
+      setNotesConcurrence(a.notes_concurrence ?? "")
+      setConcurrentValue(a.concurrent ?? "")
+      // Initialise SONCAS from DB value (comma-separated string)
+      if (a.soncas) {
+        setSoncasActifs(a.soncas.split(",").map((s) => s.trim()).filter(Boolean))
+      }
+
+      setPrenantes((prenantesRes.data ?? []) as PartiePrenante[])
+      setTodos((todosRes.data ?? []) as Todo[])
+      setNotes((notesRes.data ?? []) as HistoriqueNote[])
+    } catch {
+      setError("Erreur lors du chargement de l'affaire")
+    } finally {
+      setLoading(false)
+    }
+  }, [id])
+
+  useEffect(() => {
+    fetchAll()
+  }, [fetchAll])
 
   // ── Handlers ─────────────────────────────────────────────────────────────────
 
@@ -203,37 +189,102 @@ export default function AffaireDetailPage() {
     )
   }
 
-  function toggleTodo(id: number) {
-    setTodos((prev) => prev.map((t) => t.id === id ? { ...t, fait: !t.fait } : t))
+  async function toggleTodo(todoId: string, fait: boolean) {
+    const { error } = await supabase
+      .from("todos")
+      .update({ fait: !fait })
+      .eq("id", todoId)
+    if (!error) {
+      setTodos((prev) => prev.map((t) => t.id === todoId ? { ...t, fait: !fait } : t))
+    }
   }
 
-  function ajouterTodo() {
-    if (!newTodoTexte) return
-    setTodos((prev) => [
-      { id: Date.now(), texte: newTodoTexte, date: newTodoDate || "2026-12-31",
-        fait: false, categorie: newTodoUrgent ? "Urgence" : "Admin", urgent: newTodoUrgent },
-      ...prev,
-    ])
+  async function supprimerTodo(todoId: string) {
+    const { error } = await supabase.from("todos").delete().eq("id", todoId)
+    if (!error) {
+      setTodos((prev) => prev.filter((t) => t.id !== todoId))
+    }
+  }
+
+  async function ajouterTodo() {
+    if (!newTodoTexte || !affaire) return
+    const payload = {
+      affaire_id: affaire.id,
+      texte: newTodoTexte,
+      date_limite: newTodoDate || "2026-12-31",
+      fait: false,
+      categorie: newTodoUrgent ? "Urgence" : "Admin",
+      urgent: newTodoUrgent,
+    }
+    const { data, error } = await supabase.from("todos").insert(payload).select().single()
+    if (!error && data) {
+      setTodos((prev) => [data as Todo, ...prev])
+    }
     setNewTodoTexte(""); setNewTodoDate(""); setNewTodoUrgent(false)
     setShowAddTodo(false)
   }
 
-  function ajouterNote() {
-    if (!newNoteContenu) return
-    setNotes((prev) => [
-      { id: Date.now(), type: newNoteType, date: newNoteDate, contenu: newNoteContenu },
-      ...prev,
-    ])
+  async function ajouterNote() {
+    if (!newNoteContenu || !affaire) return
+    const payload = {
+      affaire_id: affaire.id,
+      type: newNoteType,
+      date: newNoteDate,
+      contenu: newNoteContenu,
+    }
+    const { data, error } = await supabase.from("historique_notes").insert(payload).select().single()
+    if (!error && data) {
+      setNotes((prev) => [data as HistoriqueNote, ...prev])
+    }
     setNewNoteContenu(""); setNewNoteType("Appel")
     setNewNoteDate(new Date().toISOString().split("T")[0])
     setShowAddNote(false)
   }
 
-  function ajouterPrenante() {
-    if (!newPrenante.nom) return
-    setPrenantes((prev) => [...prev, { id: Date.now(), ...newPrenante }])
+  async function supprimerNote(noteId: string) {
+    const { error } = await supabase.from("historique_notes").delete().eq("id", noteId)
+    if (!error) {
+      setNotes((prev) => prev.filter((n) => n.id !== noteId))
+    }
+  }
+
+  async function ajouterPrenante() {
+    if (!newPrenante.nom || !affaire) return
+    const payload = {
+      affaire_id: affaire.id,
+      nom: newPrenante.nom,
+      role: newPrenante.role,
+      influence: newPrenante.influence,
+    }
+    const { data, error } = await supabase.from("parties_prenantes").insert(payload).select().single()
+    if (!error && data) {
+      setPrenantes((prev) => [...prev, data as PartiePrenante])
+    }
     setNewPrenante({ nom: "", role: "", influence: "Moyen" })
     setShowAddPrenante(false)
+  }
+
+  async function supprimerPrenante(prenId: string) {
+    const { error } = await supabase.from("parties_prenantes").delete().eq("id", prenId)
+    if (!error) {
+      setPrenantes((prev) => prev.filter((p) => p.id !== prenId))
+    }
+  }
+
+  async function sauvegarderAffaire() {
+    if (!affaire) return
+    const { error } = await supabase
+      .from("affaires")
+      .update({
+        concurrent: concurrentValue,
+        notes_concurrence: notesConcurrence,
+        soncas: soncasActifs.join(", "),
+      })
+      .eq("id", affaire.id)
+    if (!error) {
+      setAffaire((prev) => prev ? { ...prev, concurrent: concurrentValue, notes_concurrence: notesConcurrence, soncas: soncasActifs.join(", ") } : prev)
+      setEditMode(false)
+    }
   }
 
   function ouvrirPrompt(titre: string, contenu: string) {
@@ -248,7 +299,39 @@ export default function AffaireDetailPage() {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  // ── Render ───────────────────────────────────────────────────────────────────
+  // ── Render guards ─────────────────────────────────────────────────────────────
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen">
+        <Sidebar />
+        <div className="flex-1 md:ml-60 flex flex-col">
+          <TopBar title="Fiche affaire" />
+          <div className="flex-1 flex items-center justify-center">
+            <LoadingSpinner />
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (error || !affaire) {
+    return (
+      <div className="flex min-h-screen">
+        <Sidebar />
+        <div className="flex-1 md:ml-60 flex flex-col">
+          <TopBar title="Fiche affaire" />
+          <div className="flex-1 flex items-center justify-center p-8">
+            <ErrorMessage message={error ?? "Affaire introuvable"} onRetry={fetchAll} />
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const prompts = buildPrompts(affaire, soncasActifs)
+
+  // ── Render ────────────────────────────────────────────────────────────────────
 
   return (
     <div className="flex min-h-screen">
@@ -280,15 +363,26 @@ export default function AffaireDetailPage() {
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <h2 className="text-xl font-bold" style={{ color: "#f1f5f9" }}>{affaire.structure}</h2>
-                    <p className="text-sm mt-0.5" style={{ color: "rgba(255,255,255,0.5)" }}>{affaire.typeInter}</p>
+                    <p className="text-sm mt-0.5" style={{ color: "rgba(255,255,255,0.5)" }}>{affaire.type_inter}</p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <span className="px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-amber-500/20 border border-amber-500/40 text-amber-300">
                       {affaire.etape}
                     </span>
-                    <button className="btn-secondary text-xs px-3 py-1.5 flex items-center gap-1.5">
-                      <Pencil size={13} /> Modifier
+                    <button
+                      onClick={() => setEditMode(!editMode)}
+                      className="btn-secondary text-xs px-3 py-1.5 flex items-center gap-1.5"
+                    >
+                      <Pencil size={13} /> {editMode ? "Annuler" : "Modifier"}
                     </button>
+                    {editMode && (
+                      <button
+                        onClick={sauvegarderAffaire}
+                        className="btn-primary text-xs px-3 py-1.5 flex items-center gap-1.5"
+                      >
+                        <Check size={13} /> Sauvegarder
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -298,12 +392,12 @@ export default function AffaireDetailPage() {
                 <h3 className="text-sm font-semibold mb-3" style={{ color: "#f1f5f9" }}>Infos clés</h3>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                   {[
-                    { label: "Type projet",    value: affaire.typeProjet },
+                    { label: "Type projet",    value: affaire.type_projet },
                     { label: "Espèce",         value: affaire.espece },
-                    { label: "Nb de places",   value: affaire.nbPlaces.toLocaleString("fr-FR") },
-                    { label: "Montant estimé", value: fmt(affaire.montant), green: true },
+                    { label: "Nb de places",   value: affaire.nb_places.toLocaleString("fr-FR") },
+                    { label: "Montant estimé", value: fmt(affaire.montant_estime), green: true },
                     { label: "Marge estimée",  value: `${affaire.marge}%`, marge: true },
-                    { label: "Date décision",  value: new Date(affaire.dateDecision).toLocaleDateString("fr-FR") },
+                    { label: "Date décision",  value: affaire.date_decision ? new Date(affaire.date_decision).toLocaleDateString("fr-FR") : "—" },
                   ].map(({ label, value, green, marge }) => (
                     <div key={label} style={{ background: "rgba(255,255,255,0.06)", borderRadius: "12px" }} className="px-3 py-2.5">
                       <p className="text-xs mb-0.5 text-white/40">{label}</p>
@@ -334,17 +428,26 @@ export default function AffaireDetailPage() {
                       <th className="text-left pb-2 text-[11px] uppercase tracking-widest text-white/35">Nom</th>
                       <th className="text-left pb-2 text-[11px] uppercase tracking-widest text-white/35">Rôle</th>
                       <th className="text-left pb-2 text-[11px] uppercase tracking-widest text-white/35">Influence</th>
+                      <th className="w-6 pb-2" />
                     </tr>
                   </thead>
                   <tbody>
                     {prenantes.map((p) => (
-                      <tr key={p.id} style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                      <tr key={p.id} className="group" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
                         <td className="py-2.5 font-medium pr-3" style={{ color: "#f1f5f9" }}>{p.nom}</td>
                         <td className="py-2.5 text-xs pr-3" style={{ color: "rgba(255,255,255,0.5)" }}>{p.role}</td>
                         <td className="py-2.5">
-                          <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium ${INFLUENCE_STYLE[p.influence]}`}>
+                          <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium ${INFLUENCE_STYLE[p.influence] ?? INFLUENCE_STYLE["Faible"]}`}>
                             {p.influence}
                           </span>
+                        </td>
+                        <td className="py-2.5 text-right">
+                          <button
+                            onClick={() => supprimerPrenante(p.id)}
+                            className="opacity-0 group-hover:opacity-100 p-1 rounded transition-all text-white/20 hover:text-red-400"
+                          >
+                            <X size={12} />
+                          </button>
                         </td>
                       </tr>
                     ))}
@@ -403,7 +506,8 @@ export default function AffaireDetailPage() {
                   <label className="text-xs block mb-1" style={{ color: "rgba(255,255,255,0.5)" }}>Concurrent identifié</label>
                   <input
                     type="text"
-                    defaultValue={affaire.concurrent}
+                    value={concurrentValue}
+                    onChange={(e) => setConcurrentValue(e.target.value)}
                     className="input-glass w-full"
                   />
                 </div>
@@ -416,6 +520,14 @@ export default function AffaireDetailPage() {
                     className="textarea-glass w-full"
                   />
                 </div>
+                {(concurrentValue !== (affaire.concurrent ?? "") || notesConcurrence !== (affaire.notes_concurrence ?? "")) && (
+                  <button
+                    onClick={sauvegarderAffaire}
+                    className="mt-3 btn-primary text-xs px-3 py-1.5 flex items-center gap-1.5"
+                  >
+                    <Check size={13} /> Sauvegarder les modifications
+                  </button>
+                )}
               </div>
 
               {/* ── Boutons IA ── */}
@@ -490,18 +602,22 @@ export default function AffaireDetailPage() {
 
                 <ul className="p-4 space-y-1">
                   {todos.map((todo) => {
-                    const depasse = !todo.fait && isDepasse(todo.date)
+                    const depasse = !todo.fait && isDepasse(todo.date_limite)
                     return (
                       <li
                         key={todo.id}
-                        onClick={() => toggleTodo(todo.id)}
-                        className="flex items-start gap-2.5 cursor-pointer group p-2.5 rounded-xl transition-colors hover:bg-white/[0.04]"
+                        className="flex items-start gap-2.5 group p-2.5 rounded-xl transition-colors hover:bg-white/[0.04]"
                       >
-                        {todo.fait ? (
-                          <CheckSquare size={17} className="mt-0.5 shrink-0" style={{ color: "#10b981" }} />
-                        ) : (
-                          <Square size={17} className={`mt-0.5 shrink-0 transition-colors ${depasse ? "text-red-400" : "group-hover:text-indigo-400"}`} style={{ color: depasse ? "#f87171" : "rgba(255,255,255,0.25)" }} />
-                        )}
+                        <button
+                          onClick={() => toggleTodo(todo.id, todo.fait)}
+                          className="mt-0.5 shrink-0"
+                        >
+                          {todo.fait ? (
+                            <CheckSquare size={17} style={{ color: "#10b981" }} />
+                          ) : (
+                            <Square size={17} style={{ color: depasse ? "#f87171" : "rgba(255,255,255,0.25)" }} />
+                          )}
+                        </button>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm leading-snug" style={{
                             color: todo.fait ? "rgba(255,255,255,0.35)" : "#f1f5f9",
@@ -512,13 +628,19 @@ export default function AffaireDetailPage() {
                           <div className="flex items-center gap-2 mt-0.5">
                             <span className="text-xs" style={{ color: depasse ? "#ef4444" : "rgba(255,255,255,0.35)", fontWeight: depasse ? 600 : 400 }}>
                               {depasse && <AlertCircle size={10} className="inline mr-0.5" />}
-                              {new Date(todo.date).toLocaleDateString("fr-FR")}
+                              {new Date(todo.date_limite).toLocaleDateString("fr-FR")}
                             </span>
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${TODO_CAT_STYLE[todo.categorie]}`}>
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${TODO_CAT_STYLE[todo.categorie] ?? TODO_CAT_STYLE["Admin"]}`}>
                               {todo.categorie}
                             </span>
                           </div>
                         </div>
+                        <button
+                          onClick={() => supprimerTodo(todo.id)}
+                          className="opacity-0 group-hover:opacity-100 p-1 rounded transition-all text-white/20 hover:text-red-400 shrink-0"
+                        >
+                          <X size={12} />
+                        </button>
                       </li>
                     )
                   })}
@@ -561,10 +683,11 @@ export default function AffaireDetailPage() {
                 {/* Timeline */}
                 <div className="p-5 space-y-0">
                   {notes.map((note, i) => {
-                    const { dot, badge } = NOTE_TYPE_STYLE[note.type]
+                    const noteStyle = NOTE_TYPE_STYLE[note.type] ?? NOTE_TYPE_STYLE["Appel"]
+                    const { dot, badge } = noteStyle
                     const isLast = i === notes.length - 1
                     return (
-                      <div key={note.id} className="flex gap-3">
+                      <div key={note.id} className="flex gap-3 group">
                         <div className="flex flex-col items-center shrink-0 w-4">
                           <div className={`w-3 h-3 rounded-full ${dot} shrink-0 mt-1`} />
                           {!isLast && <div className="w-px flex-1 mt-1 mb-0" style={{ background: "rgba(255,255,255,0.1)" }} />}
@@ -576,6 +699,12 @@ export default function AffaireDetailPage() {
                             <span className="text-xs" style={{ color: "rgba(255,255,255,0.35)" }}>
                               {new Date(note.date).toLocaleDateString("fr-FR")}
                             </span>
+                            <button
+                              onClick={() => supprimerNote(note.id)}
+                              className="ml-auto opacity-0 group-hover:opacity-100 p-1 rounded transition-all text-white/20 hover:text-red-400"
+                            >
+                              <X size={12} />
+                            </button>
                           </div>
                           <p className="text-sm leading-relaxed" style={{ color: "rgba(255,255,255,0.7)" }}>{note.contenu}</p>
                           <button

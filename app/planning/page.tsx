@@ -1,22 +1,21 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect, useCallback } from "react"
 import {
   ChevronLeft, ChevronRight, Plus, X, Copy, Check,
   ChevronDown, MapPin, Clock, CheckSquare, Square, Download,
 } from "lucide-react"
 import Sidebar from "@/components/Sidebar"
 import TopBar from "@/components/TopBar"
+import LoadingSpinner from "@/components/LoadingSpinner"
+import ErrorMessage from "@/components/ErrorMessage"
 import { exportToCSV, fmtDateExport } from "@/lib/export"
+import { supabase } from "@/lib/supabase"
+import type { RDV, Todo } from "@/lib/types"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type TypeRDV = "Prospection" | "R1 Découverte" | "Visite terrain" | "R2 Proposition" | "Négociation" | "Suivi client"
-
-interface RDV {
-  id: number; titre: string; affaire: string; type: TypeRDV
-  date: string; heure: string; duree: string; lieu: string; notes?: string
-}
 
 interface PromptPanel { titre: string; contenu: string }
 
@@ -34,55 +33,8 @@ const TYPE_CONFIG: Record<TypeRDV, { block: string; borderColor: string; badge: 
 const JOURS_FR = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"]
 const MOIS_FR  = ["janv.","févr.","mars","avr.","mai","juin","juil.","août","sept.","oct.","nov.","déc."]
 
-const AFFAIRES_LISTE = [
-  "EARL Morin – Neuf 22 000 pl.", "Gauthier Volailles – Extension",
-  "SAS Lefèvre Avicole – Rénovation", "GAEC du Bocage – Neuf dinde",
-  "Ferme Dupont – Remplacement", "Coopérative Arvor – Extension canard",
-  "SCEA Bretagne Plumes – Neuf bio", "Élevages Martin – Rénovation",
-]
 
 const DUREES = ["30min", "1h", "1h30", "2h", "3h"]
-
-// ─── Données fictives ─────────────────────────────────────────────────────────
-
-const RDVS_INIT: RDV[] = [
-  { id: 1, titre: "Visite terrain EARL Morin",       affaire: "EARL Morin – Neuf 22 000 pl.",  type: "Visite terrain", date: "2026-03-09", heure: "09:00", duree: "2h",    lieu: "La Ferrière, 44110",   notes: "Vérifier orientation bâtiment et nature du sol (argileux). Emmener photos de références chantiers similaires." },
-  { id: 2, titre: "R1 Découverte GAEC du Bocage",    affaire: "GAEC du Bocage – Neuf dinde",   type: "R1 Découverte",  date: "2026-03-10", heure: "14:00", duree: "1h30",  lieu: "Bocage Normand, 61210", notes: "Premier RDV. Préparer plaquette dindes + références chantiers. Qualifier le budget." },
-  { id: 3, titre: "R2 Proposition Gauthier Volailles",affaire: "Gauthier Volailles – Extension",type: "R2 Proposition", date: "2026-03-11", heure: "10:00", duree: "1h30",  lieu: "Loué, 72540",           notes: "Apporter 2 exemplaires devis DEV-2026-002. Ne pas lâcher sur le prix, insister sur la garantie 10 ans." },
-  { id: 4, titre: "Prospection Ferme Bertrand",       affaire: "—",                             type: "Prospection",    date: "2026-03-12", heure: "15:00", duree: "30min", lieu: "Téléphone",             notes: "" },
-]
-
-function exportRDVs() {
-  exportToCSV(
-    RDVS_INIT.map(r => ({
-      date:    fmtDateExport(r.date),
-      heure:   r.heure,
-      titre:   r.titre,
-      type:    r.type,
-      affaire: r.affaire,
-      lieu:    r.lieu,
-      fait:    "non",
-    })),
-    `planning-MEB32-${new Date().toISOString().slice(0, 7)}.csv`,
-    [
-      { key: "date",    label: "Date"         },
-      { key: "heure",   label: "Heure"        },
-      { key: "titre",   label: "Titre"        },
-      { key: "type",    label: "Type RDV"     },
-      { key: "affaire", label: "Affaire liée" },
-      { key: "lieu",    label: "Lieu"         },
-      { key: "fait",    label: "Fait (oui/non)" },
-    ]
-  )
-}
-
-const TODOS_INIT = [
-  { id: 1, texte: "Préparer devis SCEA Bretagne Plumes",         fait: false },
-  { id: 2, texte: "Envoyer plan masse EARL Morin post-visite",   fait: false },
-  { id: 3, texte: "Relancer Gauthier Volailles (devis J+8)",     fait: false },
-  { id: 4, texte: "Mettre à jour fiche GAEC du Bocage après R1", fait: true  },
-  { id: 5, texte: "Contacter CA pour simulation financement",    fait: false },
-]
 
 const TRAMES = [
   {
@@ -212,8 +164,11 @@ function SelectField({ label, value, onChange, children }: {
 
 export default function PlanningPage() {
   const [weekOffset, setWeekOffset]   = useState(0)
-  const [rdvs, setRdvs]               = useState<RDV[]>(RDVS_INIT)
-  const [todos, setTodos]             = useState(TODOS_INIT)
+  const [rdvs, setRdvs]               = useState<RDV[]>([])
+  const [todos, setTodos]             = useState<Todo[]>([])
+  const [affairesList, setAffairesList] = useState<string[]>([])
+  const [loading, setLoading]         = useState(true)
+  const [error, setError]             = useState<string | null>(null)
   const [selectedRdv, setSelectedRdv] = useState<RDV | null>(null)
   const [showNewForm, setShowNewForm] = useState(false)
   const [form, setForm]               = useState(FORM_VIDE)
@@ -221,6 +176,32 @@ export default function PlanningPage() {
   const [copied, setCopied]           = useState(false)
   // Mobile : offset en jours depuis aujourd'hui
   const [dayOffset, setDayOffset] = useState(0)
+
+  // ── Fetch data ─────────────────────────────────────────────────────────────
+  const fetchData = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const [rdvsRes, todosRes, affRes] = await Promise.all([
+        supabase.from('rdvs').select('*').order('date_rdv', { ascending: true }),
+        supabase.from('todos').select('*').order('date_limite', { ascending: true }),
+        supabase.from('affaires').select('structure').order('structure'),
+      ])
+      if (rdvsRes.error) throw rdvsRes.error
+      if (todosRes.error) throw todosRes.error
+      setRdvs(rdvsRes.data || [])
+      setTodos(todosRes.data || [])
+      setAffairesList((affRes.data || []).map((a: { structure: string }) => a.structure))
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Erreur inconnue')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchData()
+  }, [fetchData])
 
   // ── Semaine ───────────────────────────────────────────────────────────────
   const monday = useMemo(() => getWeekMonday(weekOffset), [weekOffset])
@@ -237,7 +218,7 @@ export default function PlanningPage() {
 
   function rdvsForDay(day: Date) {
     const ds = dateStr(day)
-    return rdvs.filter((r) => r.date === ds).sort((a, b) => a.heure.localeCompare(b.heure))
+    return rdvs.filter((r) => r.date_rdv === ds).sort((a, b) => a.heure.localeCompare(b.heure))
   }
 
   // ── Handlers ───────────────────────────────────────────────────────────────
@@ -245,12 +226,32 @@ export default function PlanningPage() {
     setForm((p) => ({ ...p, [k]: v }))
   }
 
-  function ajouterRdv(e: React.FormEvent) {
+  async function ajouterRdv(e: React.FormEvent) {
     e.preventDefault()
     if (!form.titre || !form.date) return
-    setRdvs((p) => [...p, { id: Date.now(), ...form }])
+    const { error: insertError } = await supabase.from('rdvs').insert([{
+      titre:    form.titre,
+      affaire:  form.affaire,
+      type_rdv: form.type,
+      date_rdv: form.date,
+      heure:    form.heure,
+      duree:    form.duree,
+      lieu:     form.lieu,
+      notes:    form.notes || null,
+      fait:     false,
+    }])
+    if (insertError) {
+      setError(insertError.message)
+      return
+    }
     setForm(FORM_VIDE)
     setShowNewForm(false)
+    await fetchData()
+  }
+
+  async function toggleTodo(todo: Todo) {
+    await supabase.from('todos').update({ fait: !todo.fait }).eq('id', todo.id)
+    setTodos((p) => p.map((t) => t.id === todo.id ? { ...t, fait: !t.fait } : t))
   }
 
   function ouvrirPrompt(titre: string, contenu: string) {
@@ -262,15 +263,15 @@ export default function PlanningPage() {
     return `Tu es un commercial spécialisé en équipement avicole.
 
 Je prépare le RDV suivant :
-- Type : ${rdv.type}
+- Type : ${rdv.type_rdv}
 - Affaire : ${rdv.affaire}
-- Date : ${new Date(rdv.date).toLocaleDateString("fr-FR")} à ${rdv.heure} (${rdv.duree})
+- Date : ${new Date(rdv.date_rdv).toLocaleDateString("fr-FR")} à ${rdv.heure} (${rdv.duree})
 - Lieu : ${rdv.lieu}
 - Notes de préparation : ${rdv.notes || "aucune"}
 
 Aide-moi à préparer ce rendez-vous :
 1. Les 3 objectifs prioritaires à atteindre durant ce RDV
-2. Les questions clés à poser (adaptées au type ${rdv.type})
+2. Les questions clés à poser (adaptées au type ${rdv.type_rdv})
 3. Les points différenciants à mettre en avant
 4. Les documents et supports à apporter
 5. Le closing idéal pour terminer ce RDV (prochaine étape concrète)`
@@ -281,6 +282,30 @@ Aide-moi à préparer ce rendez-vous :
     await navigator.clipboard.writeText(promptPanel.contenu)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
+  }
+
+  function exportRDVs() {
+    exportToCSV(
+      rdvs.map(r => ({
+        date:    fmtDateExport(r.date_rdv),
+        heure:   r.heure,
+        titre:   r.titre,
+        type:    r.type_rdv,
+        affaire: r.affaire,
+        lieu:    r.lieu,
+        fait:    r.fait ? "oui" : "non",
+      })),
+      `planning-MEB32-${new Date().toISOString().slice(0, 7)}.csv`,
+      [
+        { key: "date",    label: "Date"           },
+        { key: "heure",   label: "Heure"          },
+        { key: "titre",   label: "Titre"          },
+        { key: "type",    label: "Type RDV"       },
+        { key: "affaire", label: "Affaire liée"   },
+        { key: "lieu",    label: "Lieu"           },
+        { key: "fait",    label: "Fait (oui/non)" },
+      ]
+    )
   }
 
   // ── Jour mobile ──────────────────────────────────────────────────────────
@@ -318,257 +343,264 @@ Aide-moi à préparer ce rendez-vous :
 
         <main className="flex-1 p-4 md:p-6 pb-24 md:pb-6">
 
-          {/* ── Vue mobile : Jour ── */}
-          <div className="md:hidden">
-            {/* Nav jour */}
-            <div className="flex items-center justify-between mb-4">
-              <button
-                onClick={() => setDayOffset(o => o - 1)}
-                className="w-10 h-10 flex items-center justify-center rounded-xl"
-                style={{ background: "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.7)" }}
-              >
-                <ChevronLeft size={20} />
-              </button>
+          {loading && <LoadingSpinner />}
+          {error && <ErrorMessage message={error} />}
 
-              <div className="text-center flex-1 mx-3">
-                <p className="text-sm font-semibold capitalize" style={{ color: "#f1f5f9" }}>
-                  {mobileDayLabel}
-                </p>
-                {isToday(mobileDay) && (
-                  <span className="text-[11px] font-medium px-2 py-0.5 rounded-full"
-                    style={{ background: "rgba(99,102,241,0.2)", color: "#a5b4fc" }}>
-                    Aujourd&apos;hui
-                  </span>
+          {!loading && !error && (
+            <>
+              {/* ── Vue mobile : Jour ── */}
+              <div className="md:hidden">
+                {/* Nav jour */}
+                <div className="flex items-center justify-between mb-4">
+                  <button
+                    onClick={() => setDayOffset(o => o - 1)}
+                    className="w-10 h-10 flex items-center justify-center rounded-xl"
+                    style={{ background: "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.7)" }}
+                  >
+                    <ChevronLeft size={20} />
+                  </button>
+
+                  <div className="text-center flex-1 mx-3">
+                    <p className="text-sm font-semibold capitalize" style={{ color: "#f1f5f9" }}>
+                      {mobileDayLabel}
+                    </p>
+                    {isToday(mobileDay) && (
+                      <span className="text-[11px] font-medium px-2 py-0.5 rounded-full"
+                        style={{ background: "rgba(99,102,241,0.2)", color: "#a5b4fc" }}>
+                        Aujourd&apos;hui
+                      </span>
+                    )}
+                  </div>
+
+                  <button
+                    onClick={() => setDayOffset(o => o + 1)}
+                    className="w-10 h-10 flex items-center justify-center rounded-xl"
+                    style={{ background: "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.7)" }}
+                  >
+                    <ChevronRight size={20} />
+                  </button>
+                </div>
+
+                {dayOffset !== 0 && (
+                  <button
+                    onClick={() => setDayOffset(0)}
+                    className="w-full mb-3 py-2 rounded-xl text-xs font-medium"
+                    style={{ background: "rgba(99,102,241,0.15)", color: "#a5b4fc", border: "1px solid rgba(99,102,241,0.3)" }}
+                  >
+                    Revenir à aujourd&apos;hui
+                  </button>
+                )}
+
+                {/* RDVs du jour */}
+                {mobileDayRdvs.length === 0 ? (
+                  <div
+                    onClick={() => { setForm(f => ({ ...f, date: dateStr(mobileDay) })); setShowNewForm(true) }}
+                    className="rounded-2xl py-12 flex flex-col items-center justify-center gap-2 cursor-pointer"
+                    style={{ border: "2px dashed rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.3)" }}
+                  >
+                    <Plus size={24} />
+                    <span className="text-sm">Aucun RDV — Ajouter</span>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {mobileDayRdvs.map((rdv) => {
+                      const cfg = TYPE_CONFIG[rdv.type_rdv as TypeRDV] ?? TYPE_CONFIG["Prospection"]
+                      return (
+                        <button
+                          key={rdv.id}
+                          onClick={() => setSelectedRdv(rdv)}
+                          className="w-full text-left glass rounded-2xl px-4 py-4 hover:opacity-80 transition-opacity"
+                          style={{ borderLeft: `4px solid ${cfg.borderColor}` }}
+                        >
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium ${cfg.badge}`}>
+                              {rdv.type_rdv}
+                            </span>
+                            <span className="text-xs font-semibold ml-auto" style={{ color: "rgba(255,255,255,0.6)" }}>
+                              {rdv.heure} · {rdv.duree}
+                            </span>
+                          </div>
+                          <p className="font-semibold text-sm" style={{ color: "#f1f5f9" }}>{rdv.titre}</p>
+                          {rdv.lieu && (
+                            <div className="flex items-center gap-1 mt-1">
+                              <MapPin size={11} style={{ color: "rgba(255,255,255,0.35)" }} />
+                              <p className="text-xs" style={{ color: "rgba(255,255,255,0.45)" }}>{rdv.lieu}</p>
+                            </div>
+                          )}
+                        </button>
+                      )
+                    })}
+                  </div>
                 )}
               </div>
 
-              <button
-                onClick={() => setDayOffset(o => o + 1)}
-                className="w-10 h-10 flex items-center justify-center rounded-xl"
-                style={{ background: "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.7)" }}
-              >
-                <ChevronRight size={20} />
-              </button>
-            </div>
-
-            {dayOffset !== 0 && (
-              <button
-                onClick={() => setDayOffset(0)}
-                className="w-full mb-3 py-2 rounded-xl text-xs font-medium"
-                style={{ background: "rgba(99,102,241,0.15)", color: "#a5b4fc", border: "1px solid rgba(99,102,241,0.3)" }}
-              >
-                Revenir à aujourd&apos;hui
-              </button>
-            )}
-
-            {/* RDVs du jour */}
-            {mobileDayRdvs.length === 0 ? (
-              <div
-                onClick={() => { setForm(f => ({ ...f, date: dateStr(mobileDay) })); setShowNewForm(true) }}
-                className="rounded-2xl py-12 flex flex-col items-center justify-center gap-2 cursor-pointer"
-                style={{ border: "2px dashed rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.3)" }}
-              >
-                <Plus size={24} />
-                <span className="text-sm">Aucun RDV — Ajouter</span>
+              {/* ── Vue desktop : Nav semaine + grille ── */}
+              <div className="hidden md:block">
+              {/* ── Nav semaine ── */}
+              <div className="flex items-center gap-3 mb-5 flex-wrap">
+                <button onClick={() => setWeekOffset((o) => o - 1)}
+                  className="btn-secondary rounded-xl px-3 py-2 text-sm flex items-center gap-1">
+                  <ChevronLeft size={15} /> Semaine précédente
+                </button>
+                <span className="font-semibold text-sm px-2" style={{ color: "#f1f5f9" }}>{rangeLabel}</span>
+                <button onClick={() => setWeekOffset(0)}
+                  className={`rounded-xl px-3 py-2 text-sm ${weekOffset === 0 ? "btn-primary" : "btn-secondary"}`}>
+                  Aujourd&apos;hui
+                </button>
+                <button onClick={() => setWeekOffset((o) => o + 1)}
+                  className="btn-secondary rounded-xl px-3 py-2 text-sm flex items-center gap-1">
+                  Semaine suivante <ChevronRight size={15} />
+                </button>
+                <button onClick={() => setShowNewForm(true)}
+                  className="ml-auto btn-primary rounded-xl flex items-center gap-2 text-sm font-semibold px-4 py-2.5">
+                  <Plus size={16} /> RDV
+                </button>
               </div>
-            ) : (
-              <div className="space-y-3">
-                {mobileDayRdvs.map((rdv) => {
-                  const cfg = TYPE_CONFIG[rdv.type]
-                  return (
-                    <button
-                      key={rdv.id}
-                      onClick={() => setSelectedRdv(rdv)}
-                      className="w-full text-left glass rounded-2xl px-4 py-4 hover:opacity-80 transition-opacity"
-                      style={{ borderLeft: `4px solid ${cfg.borderColor}` }}
-                    >
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium ${cfg.badge}`}>
-                          {rdv.type}
-                        </span>
-                        <span className="text-xs font-semibold ml-auto" style={{ color: "rgba(255,255,255,0.6)" }}>
-                          {rdv.heure} · {rdv.duree}
-                        </span>
-                      </div>
-                      <p className="font-semibold text-sm" style={{ color: "#f1f5f9" }}>{rdv.titre}</p>
-                      {rdv.lieu && (
-                        <div className="flex items-center gap-1 mt-1">
-                          <MapPin size={11} style={{ color: "rgba(255,255,255,0.35)" }} />
-                          <p className="text-xs" style={{ color: "rgba(255,255,255,0.45)" }}>{rdv.lieu}</p>
-                        </div>
-                      )}
-                    </button>
-                  )
-                })}
-              </div>
-            )}
-          </div>
 
-          {/* ── Vue desktop : Nav semaine + grille ── */}
-          <div className="hidden md:block">
-          {/* ── Nav semaine ── */}
-          <div className="flex items-center gap-3 mb-5 flex-wrap">
-            <button onClick={() => setWeekOffset((o) => o - 1)}
-              className="btn-secondary rounded-xl px-3 py-2 text-sm flex items-center gap-1">
-              <ChevronLeft size={15} /> Semaine précédente
-            </button>
-            <span className="font-semibold text-sm px-2" style={{ color: "#f1f5f9" }}>{rangeLabel}</span>
-            <button onClick={() => setWeekOffset(0)}
-              className={`rounded-xl px-3 py-2 text-sm ${weekOffset === 0 ? "btn-primary" : "btn-secondary"}`}>
-              Aujourd&apos;hui
-            </button>
-            <button onClick={() => setWeekOffset((o) => o + 1)}
-              className="btn-secondary rounded-xl px-3 py-2 text-sm flex items-center gap-1">
-              Semaine suivante <ChevronRight size={15} />
-            </button>
-            <button onClick={() => setShowNewForm(true)}
-              className="ml-auto btn-primary rounded-xl flex items-center gap-2 text-sm font-semibold px-4 py-2.5">
-              <Plus size={16} /> RDV
-            </button>
-          </div>
+              {/* ── Grille calendrier + panneau droit ── */}
+              <div className="flex gap-5 items-start">
 
-          {/* ── Grille calendrier + panneau droit ── */}
-          <div className="flex gap-5 items-start">
-
-            {/* Calendrier 5 colonnes */}
-            <div className="flex-1 min-w-0 grid grid-cols-5 gap-2">
-              {days.map((day) => {
-                const rdvsDay = rdvsForDay(day)
-                const today   = isToday(day)
-                return (
-                  <div key={dateStr(day)} className="flex flex-col gap-2 min-w-0">
-                    {/* En-tête colonne */}
-                    <div
-                      className="rounded-2xl px-2 py-2 text-center"
-                      style={today
-                        ? { background: "linear-gradient(135deg,#6366f1,#8b5cf6)" }
-                        : undefined}
-                    >
-                      {!today && (
-                        <div className="glass rounded-2xl px-2 py-2 text-center -m-2">
-                          <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.5)" }}>
-                            {JOURS_FR[day.getDay()]}
-                          </p>
-                          <p className="text-lg font-bold leading-tight" style={{ color: "#f1f5f9" }}>
-                            {day.getDate()}
-                          </p>
-                          <p className="text-[10px]" style={{ color: "rgba(255,255,255,0.35)" }}>
-                            {MOIS_FR[day.getMonth()]}
-                          </p>
-                        </div>
-                      )}
-                      {today && (
-                        <>
-                          <p className="text-xs font-semibold uppercase tracking-wide text-white/80">
-                            {JOURS_FR[day.getDay()]}
-                          </p>
-                          <p className="text-lg font-bold leading-tight text-white">
-                            {day.getDate()}
-                          </p>
-                          <p className="text-[10px] text-white/60">
-                            {MOIS_FR[day.getMonth()]}
-                          </p>
-                        </>
-                      )}
-                    </div>
-
-                    {/* Blocs RDV */}
-                    <div className="flex flex-col gap-2 min-h-[200px]">
-                      {rdvsDay.length === 0 && (
+                {/* Calendrier 5 colonnes */}
+                <div className="flex-1 min-w-0 grid grid-cols-5 gap-2">
+                  {days.map((day) => {
+                    const rdvsDay = rdvsForDay(day)
+                    const today   = isToday(day)
+                    return (
+                      <div key={dateStr(day)} className="flex flex-col gap-2 min-w-0">
+                        {/* En-tête colonne */}
                         <div
-                          onClick={() => { setForm((f) => ({ ...f, date: dateStr(day) })); setShowNewForm(true) }}
-                          className="flex-1 min-h-[80px] rounded-2xl flex items-center justify-center cursor-pointer transition-colors text-xs hover:border-indigo-500/30 hover:text-indigo-400"
-                          style={{ border: "2px dashed rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.2)" }}
+                          className="rounded-2xl px-2 py-2 text-center"
+                          style={today
+                            ? { background: "linear-gradient(135deg,#6366f1,#8b5cf6)" }
+                            : undefined}
                         >
-                          <Plus size={14} />
-                        </div>
-                      )}
-                      {rdvsDay.map((rdv) => {
-                        const cfg = TYPE_CONFIG[rdv.type]
-                        return (
-                          <button
-                            key={rdv.id}
-                            onClick={() => setSelectedRdv(rdv)}
-                            className={`text-left rounded-2xl px-2.5 py-2 ${cfg.block} hover:opacity-80 transition-opacity w-full`}
-                            style={{ borderLeft: `3px solid ${cfg.borderColor}` }}
-                          >
-                            <div className="flex items-center gap-1 mb-0.5">
-                              <Clock size={10} className="shrink-0" style={{ color: "rgba(255,255,255,0.4)" }} />
-                              <span className="text-[10px] font-semibold" style={{ color: "rgba(255,255,255,0.7)" }}>{rdv.heure}</span>
-                              <span className="text-[10px]" style={{ color: "rgba(255,255,255,0.35)" }}>· {rdv.duree}</span>
+                          {!today && (
+                            <div className="glass rounded-2xl px-2 py-2 text-center -m-2">
+                              <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,0.5)" }}>
+                                {JOURS_FR[day.getDay()]}
+                              </p>
+                              <p className="text-lg font-bold leading-tight" style={{ color: "#f1f5f9" }}>
+                                {day.getDate()}
+                              </p>
+                              <p className="text-[10px]" style={{ color: "rgba(255,255,255,0.35)" }}>
+                                {MOIS_FR[day.getMonth()]}
+                              </p>
                             </div>
-                            <p className="text-[11px] font-semibold leading-tight line-clamp-2" style={{ color: "#f1f5f9" }}>{rdv.titre}</p>
-                            {rdv.lieu && (
-                              <div className="flex items-center gap-0.5 mt-0.5">
-                                <MapPin size={9} className="shrink-0" style={{ color: "rgba(255,255,255,0.35)" }} />
-                                <p className="text-[10px] truncate" style={{ color: "rgba(255,255,255,0.4)" }}>{rdv.lieu}</p>
-                              </div>
-                            )}
-                          </button>
-                        )
-                      })}
+                          )}
+                          {today && (
+                            <>
+                              <p className="text-xs font-semibold uppercase tracking-wide text-white/80">
+                                {JOURS_FR[day.getDay()]}
+                              </p>
+                              <p className="text-lg font-bold leading-tight text-white">
+                                {day.getDate()}
+                              </p>
+                              <p className="text-[10px] text-white/60">
+                                {MOIS_FR[day.getMonth()]}
+                              </p>
+                            </>
+                          )}
+                        </div>
+
+                        {/* Blocs RDV */}
+                        <div className="flex flex-col gap-2 min-h-[200px]">
+                          {rdvsDay.length === 0 && (
+                            <div
+                              onClick={() => { setForm((f) => ({ ...f, date: dateStr(day) })); setShowNewForm(true) }}
+                              className="flex-1 min-h-[80px] rounded-2xl flex items-center justify-center cursor-pointer transition-colors text-xs hover:border-indigo-500/30 hover:text-indigo-400"
+                              style={{ border: "2px dashed rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.2)" }}
+                            >
+                              <Plus size={14} />
+                            </div>
+                          )}
+                          {rdvsDay.map((rdv) => {
+                            const cfg = TYPE_CONFIG[rdv.type_rdv as TypeRDV] ?? TYPE_CONFIG["Prospection"]
+                            return (
+                              <button
+                                key={rdv.id}
+                                onClick={() => setSelectedRdv(rdv)}
+                                className={`text-left rounded-2xl px-2.5 py-2 ${cfg.block} hover:opacity-80 transition-opacity w-full`}
+                                style={{ borderLeft: `3px solid ${cfg.borderColor}` }}
+                              >
+                                <div className="flex items-center gap-1 mb-0.5">
+                                  <Clock size={10} className="shrink-0" style={{ color: "rgba(255,255,255,0.4)" }} />
+                                  <span className="text-[10px] font-semibold" style={{ color: "rgba(255,255,255,0.7)" }}>{rdv.heure}</span>
+                                  <span className="text-[10px]" style={{ color: "rgba(255,255,255,0.35)" }}>· {rdv.duree}</span>
+                                </div>
+                                <p className="text-[11px] font-semibold leading-tight line-clamp-2" style={{ color: "#f1f5f9" }}>{rdv.titre}</p>
+                                {rdv.lieu && (
+                                  <div className="flex items-center gap-0.5 mt-0.5">
+                                    <MapPin size={9} className="shrink-0" style={{ color: "rgba(255,255,255,0.35)" }} />
+                                    <p className="text-[10px] truncate" style={{ color: "rgba(255,255,255,0.4)" }}>{rdv.lieu}</p>
+                                  </div>
+                                )}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+
+                {/* ── Panneau droit ── */}
+                <div className="hidden xl:flex flex-col gap-4 w-72 shrink-0">
+
+                  {/* To-do de la semaine */}
+                  <div className="glass">
+                    <div className="px-4 py-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
+                      <h3 className="text-sm font-semibold" style={{ color: "#f1f5f9" }}>
+                        To-do de la semaine
+                        <span className="ml-2 text-xs font-normal" style={{ color: "rgba(255,255,255,0.35)" }}>
+                          {todos.filter((t) => t.fait).length}/{todos.length}
+                        </span>
+                      </h3>
+                    </div>
+                    <ul className="p-3 space-y-1">
+                      {todos.map((todo) => (
+                        <li key={todo.id}
+                          onClick={() => toggleTodo(todo)}
+                          className="flex items-start gap-2 cursor-pointer p-1.5 rounded-lg transition-colors hover:bg-white/[0.04] group">
+                          {todo.fait
+                            ? <CheckSquare size={15} className="mt-0.5 shrink-0" style={{ color: "#10b981" }} />
+                            : <Square size={15} className="mt-0.5 shrink-0 transition-colors group-hover:text-indigo-400" style={{ color: "rgba(255,255,255,0.25)" }} />}
+                          <span className="text-xs leading-snug" style={{
+                            color: todo.fait ? "rgba(255,255,255,0.35)" : "#f1f5f9",
+                            textDecoration: todo.fait ? "line-through" : "none"
+                          }}>
+                            {todo.texte}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  {/* Trames disponibles */}
+                  <div className="glass">
+                    <div className="px-4 py-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
+                      <h3 className="text-sm font-semibold" style={{ color: "#f1f5f9" }}>Trames disponibles</h3>
+                      <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.35)" }}>Prompts à copier dans Claude.ai</p>
+                    </div>
+                    <div className="p-3 space-y-2">
+                      {TRAMES.map((t) => (
+                        <button key={t.label}
+                          onClick={() => ouvrirPrompt(t.label, t.contenu)}
+                          className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-medium transition-colors text-left"
+                          style={{ background: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.7)" }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(99,102,241,0.15)"; e.currentTarget.style.color = "#a5b4fc" }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.05)"; e.currentTarget.style.color = "rgba(255,255,255,0.7)" }}
+                        >
+                          <span className="text-base shrink-0">{t.icon}</span>
+                          {t.label}
+                        </button>
+                      ))}
                     </div>
                   </div>
-                )
-              })}
-            </div>
-
-            {/* ── Panneau droit ── */}
-            <div className="hidden xl:flex flex-col gap-4 w-72 shrink-0">
-
-              {/* To-do de la semaine */}
-              <div className="glass">
-                <div className="px-4 py-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
-                  <h3 className="text-sm font-semibold" style={{ color: "#f1f5f9" }}>
-                    To-do de la semaine
-                    <span className="ml-2 text-xs font-normal" style={{ color: "rgba(255,255,255,0.35)" }}>
-                      {todos.filter((t) => t.fait).length}/{todos.length}
-                    </span>
-                  </h3>
-                </div>
-                <ul className="p-3 space-y-1">
-                  {todos.map((todo) => (
-                    <li key={todo.id}
-                      onClick={() => setTodos((p) => p.map((t) => t.id === todo.id ? { ...t, fait: !t.fait } : t))}
-                      className="flex items-start gap-2 cursor-pointer p-1.5 rounded-lg transition-colors hover:bg-white/[0.04] group">
-                      {todo.fait
-                        ? <CheckSquare size={15} className="mt-0.5 shrink-0" style={{ color: "#10b981" }} />
-                        : <Square size={15} className="mt-0.5 shrink-0 transition-colors group-hover:text-indigo-400" style={{ color: "rgba(255,255,255,0.25)" }} />}
-                      <span className="text-xs leading-snug" style={{
-                        color: todo.fait ? "rgba(255,255,255,0.35)" : "#f1f5f9",
-                        textDecoration: todo.fait ? "line-through" : "none"
-                      }}>
-                        {todo.texte}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              {/* Trames disponibles */}
-              <div className="glass">
-                <div className="px-4 py-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
-                  <h3 className="text-sm font-semibold" style={{ color: "#f1f5f9" }}>Trames disponibles</h3>
-                  <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.35)" }}>Prompts à copier dans Claude.ai</p>
-                </div>
-                <div className="p-3 space-y-2">
-                  {TRAMES.map((t) => (
-                    <button key={t.label}
-                      onClick={() => ouvrirPrompt(t.label, t.contenu)}
-                      className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-medium transition-colors text-left"
-                      style={{ background: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.7)" }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(99,102,241,0.15)"; e.currentTarget.style.color = "#a5b4fc" }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.05)"; e.currentTarget.style.color = "rgba(255,255,255,0.7)" }}
-                    >
-                      <span className="text-base shrink-0">{t.icon}</span>
-                      {t.label}
-                    </button>
-                  ))}
                 </div>
               </div>
-            </div>
-          </div>
-          </div>{/* fin div desktop */}
+              </div>{/* fin div desktop */}
+            </>
+          )}
         </main>
       </div>
 
@@ -583,7 +615,7 @@ Aide-moi à préparer ce rendez-vous :
 
       {/* ══ MODAL DÉTAIL RDV ══ */}
       {selectedRdv && (() => {
-        const cfg = TYPE_CONFIG[selectedRdv.type]
+        const cfg = TYPE_CONFIG[selectedRdv.type_rdv as TypeRDV] ?? TYPE_CONFIG["Prospection"]
         return (
           <>
             <div className="modal-overlay" onClick={() => setSelectedRdv(null)} />
@@ -592,7 +624,7 @@ Aide-moi à préparer ce rendez-vous :
                 <div className="flex items-start justify-between px-6 py-4" style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
                   <div>
                     <span className={`inline-block px-2.5 py-0.5 rounded-full text-[11px] font-medium mb-1 ${cfg.badge}`}>
-                      {selectedRdv.type}
+                      {selectedRdv.type_rdv}
                     </span>
                     <h2 className="font-bold text-base" style={{ color: "#f1f5f9" }}>{selectedRdv.titre}</h2>
                   </div>
@@ -605,7 +637,7 @@ Aide-moi à préparer ce rendez-vous :
                     {[
                       { label: "Affaire",  value: selectedRdv.affaire },
                       { label: "Lieu",     value: selectedRdv.lieu },
-                      { label: "Date",     value: new Date(selectedRdv.date).toLocaleDateString("fr-FR") },
+                      { label: "Date",     value: new Date(selectedRdv.date_rdv).toLocaleDateString("fr-FR") },
                       { label: "Heure",    value: `${selectedRdv.heure} · ${selectedRdv.duree}` },
                     ].map(({ label, value }) => (
                       <div key={label} className="rounded-xl px-3 py-2" style={{ background: "rgba(255,255,255,0.06)" }}>
@@ -658,7 +690,7 @@ Aide-moi à préparer ce rendez-vous :
                 <div className="grid grid-cols-2 gap-3">
                   <SelectField label="Affaire liée" value={form.affaire} onChange={(v) => setF("affaire", v)}>
                     <option value="">— Aucune —</option>
-                    {AFFAIRES_LISTE.map((a) => <option key={a}>{a}</option>)}
+                    {affairesList.map((a) => <option key={a}>{a}</option>)}
                   </SelectField>
                   <SelectField label="Type RDV" value={form.type} onChange={(v) => setF("type", v as TypeRDV)}>
                     {(Object.keys(TYPE_CONFIG) as TypeRDV[]).map((t) => <option key={t}>{t}</option>)}

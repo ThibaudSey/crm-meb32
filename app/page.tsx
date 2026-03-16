@@ -1,61 +1,41 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { TrendingUp, TrendingDown, GitMerge, Percent, AlertTriangle, CheckSquare, Square, Euro } from "lucide-react"
 import Sidebar from "@/components/Sidebar"
 import TopBar from "@/components/TopBar"
+import LoadingSpinner from "@/components/LoadingSpinner"
+import { supabase } from "@/lib/supabase"
+import type { Affaire, Todo, Devis } from "@/lib/types"
 
-// ─── Données ─────────────────────────────────────────────────────────────────
+// ─── Constants ────────────────────────────────────────────────────────────────
 
-const metriques = {
-  caSigne: 142000, caObjectif: 400000, caDelta: +12,
-  pipelineTotal: 387500, affairesActives: 12, pipelineDelta: +3,
-  margeMoyenne: 34.2, margeDelta: +1.8,
-  relancesUrgentes: 3,
-}
+const CA_OBJECTIF = 400000
 
-const dernieresAffaires = [
-  { id: 1, structure: "EARL Morin",          type: "Poulailler neuf",    montant: 48000,  etape: "Devis envoyé",  typeKey: "neuf"   },
-  { id: 2, structure: "Gauthier Volailles",   type: "Extension bâtiment", montant: 32500,  etape: "Négociation",   typeKey: "ext"    },
-  { id: 3, structure: "SAS Lefèvre Avicole",  type: "Rénovation",         montant: 21000,  etape: "Gagné",         typeKey: "renov"  },
-  { id: 4, structure: "GAEC du Bocage",       type: "Poulailler neuf",    montant: 67000,  etape: "Qualification", typeKey: "neuf"   },
-  { id: 5, structure: "Ferme Dupont",         type: "Équipement seul",    montant: 14200,  etape: "Perdu",         typeKey: "rempl"  },
-]
+const ETAPES_PIPELINE = ["Prospection", "R1 Découverte", "R2 Proposition", "Négociation", "Signé"]
 
 const ETAPE_BADGE: Record<string, string> = {
-  "Devis envoyé":  "bg-blue-500/20 border border-blue-500/40 text-blue-300",
-  "Négociation":   "bg-violet-500/20 border border-violet-500/40 text-violet-300",
-  "Gagné":         "bg-emerald-500/20 border border-emerald-500/40 text-emerald-300",
-  "Qualification": "bg-amber-500/20 border border-amber-500/40 text-amber-300",
-  "Perdu":         "bg-red-500/20 border border-red-500/40 text-red-300",
+  "Prospection":    "bg-sky-500/20 border border-sky-500/40 text-sky-300",
+  "R1 Découverte":  "bg-amber-500/20 border border-amber-500/40 text-amber-300",
+  "R2 Proposition": "bg-blue-500/20 border border-blue-500/40 text-blue-300",
+  "Négociation":    "bg-violet-500/20 border border-violet-500/40 text-violet-300",
+  "Signé":          "bg-emerald-500/20 border border-emerald-500/40 text-emerald-300",
+  "Perdu":          "bg-red-500/20 border border-red-500/40 text-red-300",
 }
 
 const TYPE_BADGE: Record<string, string> = {
-  neuf:  "bg-indigo-500/20 border border-indigo-500/40 text-indigo-300",
-  renov: "bg-amber-500/20 border border-amber-500/40 text-amber-300",
-  ext:   "bg-emerald-500/20 border border-emerald-500/40 text-emerald-300",
-  rempl: "bg-red-500/20 border border-red-500/40 text-red-300",
+  "Neuf":         "bg-indigo-500/20 border border-indigo-500/40 text-indigo-300",
+  "Rénovation":   "bg-amber-500/20 border border-amber-500/40 text-amber-300",
+  "Extension":    "bg-emerald-500/20 border border-emerald-500/40 text-emerald-300",
+  "Remplacement": "bg-red-500/20 border border-red-500/40 text-red-300",
 }
 
-const devisEnAttente = [
-  { client: "Gauthier Volailles", jours: 9 },
-  { client: "EARL Morin",         jours: 8 },
-]
-
-const pipeline = [
-  { etape: "Prospect",      affaires: 5, ca: 82000  },
-  { etape: "Qualification", affaires: 3, ca: 94500  },
-  { etape: "Devis envoyé",  affaires: 4, ca: 112000 },
-  { etape: "Négociation",   affaires: 2, ca: 65500  },
-  { etape: "Gagné",         affaires: 3, ca: 33500  },
-]
-
-const todoInitial = [
-  { id: 1, texte: "Appeler GAEC du Bocage pour suivi devis",          fait: false },
-  { id: 2, texte: "Envoyer plan bâtiment à Ferme Bertrand",           fait: false },
-  { id: 3, texte: "Relancer Gauthier Volailles (devis J+9)",          fait: false },
-  { id: 4, texte: "Mettre à jour fiche SAS Lefèvre après signature",  fait: true  },
-  { id: 5, texte: "Préparer visite terrain EARL Morin – jeudi",       fait: false },
+const PIPELINE_GRADIENTS = [
+  "from-sky-400 to-sky-600",
+  "from-amber-400 to-amber-600",
+  "from-blue-400 to-blue-600",
+  "from-violet-400 to-violet-600",
+  "from-emerald-400 to-emerald-600",
 ]
 
 function fmt(n: number) {
@@ -116,7 +96,7 @@ function MetricCard({
           <div className="h-2 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.1)" }}>
             <div
               className="h-full rounded-full transition-all duration-700"
-              style={{ width: `${pct}%`, background: "linear-gradient(90deg, #6366f1, #10b981)" }}
+              style={{ width: `${Math.min(pct, 100)}%`, background: "linear-gradient(90deg, #6366f1, #10b981)" }}
             />
           </div>
         </div>
@@ -128,7 +108,68 @@ function MetricCard({
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
-  const [todos, setTodos] = useState(todoInitial)
+  const [affaires, setAffaires] = useState<Affaire[]>([])
+  const [todos, setTodos]       = useState<Todo[]>([])
+  const [devis, setDevis]       = useState<Devis[]>([])
+  const [loading, setLoading]   = useState(true)
+
+  useEffect(() => {
+    async function load() {
+      const [{ data: aff }, { data: td }, { data: dv }] = await Promise.all([
+        supabase.from("affaires").select("*").order("created_at", { ascending: false }),
+        supabase.from("todos").select("*").order("date_limite", { ascending: true }).limit(20),
+        supabase.from("devis").select("*").eq("statut", "envoye"),
+      ])
+      setAffaires(aff ?? [])
+      setTodos(td ?? [])
+      setDevis(dv ?? [])
+      setLoading(false)
+    }
+    load()
+  }, [])
+
+  // ── Computed metrics ──
+  const affairesSignees  = useMemo(() => affaires.filter(a => a.etape === "Signé"), [affaires])
+  const affairesActives  = useMemo(() => affaires.filter(a => a.etape !== "Perdu"), [affaires])
+  const caSigne          = useMemo(() => affairesSignees.reduce((s, a) => s + (a.montant_estime ?? 0), 0), [affairesSignees])
+  const pipelineTotal    = useMemo(() => affairesActives.reduce((s, a) => s + (a.montant_estime ?? 0), 0), [affairesActives])
+  const margeMoyenne     = useMemo(() => {
+    if (affairesSignees.length === 0) return 0
+    return affairesSignees.reduce((s, a) => s + (a.marge ?? 0), 0) / affairesSignees.length
+  }, [affairesSignees])
+
+  const devisEnAttente = useMemo(() => devis.map(d => ({
+    client: d.client,
+    jours: d.date_envoi
+      ? Math.floor((Date.now() - new Date(d.date_envoi).getTime()) / 86400000)
+      : 0,
+  })).filter(d => d.jours > 0).sort((a, b) => b.jours - a.jours), [devis])
+
+  const pipeline = useMemo(() => ETAPES_PIPELINE.map(etape => {
+    const aff = affaires.filter(a => a.etape === etape)
+    return {
+      etape,
+      affaires: aff.length,
+      ca: aff.reduce((s, a) => s + (a.montant_estime ?? 0), 0),
+    }
+  }), [affaires])
+
+  const dernieresAffaires = affaires.slice(0, 5)
+
+  async function toggleTodo(id: string, fait: boolean) {
+    await supabase.from("todos").update({ fait: !fait }).eq("id", id)
+    setTodos(p => p.map(t => t.id === id ? { ...t, fait: !fait } : t))
+  }
+
+  if (loading) return (
+    <div className="flex min-h-screen">
+      <Sidebar />
+      <div className="flex-1 md:ml-60 flex flex-col min-h-screen">
+        <TopBar title="Dashboard" />
+        <main className="flex-1 p-5 md:p-6"><LoadingSpinner /></main>
+      </div>
+    </div>
+  )
 
   return (
     <div className="flex min-h-screen">
@@ -139,18 +180,19 @@ export default function DashboardPage() {
 
         <main className="flex-1 p-5 md:p-6 pb-20 md:pb-8 space-y-6">
 
-          {/* ── Alerte devis ── */}
+          {/* ── Alerte devis sans retour ── */}
           {devisEnAttente.length > 0 && (
             <div className="alert-amber">
               <AlertTriangle size={17} className="shrink-0 mt-0.5" style={{ color: "#f59e0b" }} />
               <div className="text-sm">
                 <span className="font-semibold">Devis sans retour :</span>{" "}
-                {devisEnAttente.map((d, i) => (
+                {devisEnAttente.slice(0, 3).map((d, i) => (
                   <span key={d.client}>
                     {d.client} <span className="font-bold">({d.jours}j)</span>
-                    {i < devisEnAttente.length - 1 ? ", " : ""}
+                    {i < Math.min(devisEnAttente.length, 3) - 1 ? ", " : ""}
                   </span>
                 ))}
+                {devisEnAttente.length > 3 && ` +${devisEnAttente.length - 3} autres`}
                 {" "}— pensez à relancer.
               </div>
             </div>
@@ -159,101 +201,113 @@ export default function DashboardPage() {
           {/* ── 4 cartes métriques ── */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <MetricCard
-              label="CA Signé" value={fmt(metriques.caSigne)}
+              label="CA Signé" value={fmt(caSigne)}
               icon={Euro} iconGradient="linear-gradient(135deg,#10b981,#059669)"
-              delta={metriques.caDelta} deltaLabel="%"
-              progress={{ value: metriques.caSigne, max: metriques.caObjectif }}
+              progress={{ value: caSigne, max: CA_OBJECTIF }}
             />
             <MetricCard
-              label="Pipeline Total" value={fmt(metriques.pipelineTotal)}
-              sub={`${metriques.affairesActives} affaires actives`}
+              label="Pipeline Total" value={fmt(pipelineTotal)}
+              sub={`${affairesActives.length} affaires actives`}
               icon={GitMerge} iconGradient="linear-gradient(135deg,#6366f1,#8b5cf6)"
-              delta={metriques.pipelineDelta} deltaLabel=" aff."
             />
             <MetricCard
-              label="Marge Moyenne" value={`${metriques.margeMoyenne}%`}
+              label="Marge Moyenne" value={`${margeMoyenne.toFixed(1)}%`}
               sub="Sur affaires signées"
               icon={Percent} iconGradient="linear-gradient(135deg,#8b5cf6,#c084fc)"
-              delta={metriques.margeDelta} deltaLabel=" pts"
             />
             <MetricCard
-              label="Relances urgentes" value={String(metriques.relancesUrgentes)}
-              sub="À traiter aujourd'hui"
+              label="Relances urgentes" value={String(devis.length)}
+              sub="Devis en attente de retour"
               icon={AlertTriangle} iconGradient="linear-gradient(135deg,#f59e0b,#ef4444)"
             />
           </div>
 
-          {/* ── Tableau + Todo ── */}
+          {/* ── Tableau affaires + Todos ── */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
 
-            {/* Tableau affaires */}
+            {/* Tableau 5 dernières affaires */}
             <div className="lg:col-span-2 glass overflow-hidden">
               <div className="px-6 py-4" style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
                 <h2 className="font-semibold" style={{ color: "#f1f5f9" }}>5 dernières affaires</h2>
               </div>
-              <div className="overflow-x-auto">
-                <table className="table-glass">
-                  <thead>
-                    <tr>
-                      <th>Structure</th>
-                      <th className="hidden sm:table-cell">Type projet</th>
-                      <th className="right">Montant</th>
-                      <th>Étape</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {dernieresAffaires.map((a) => (
-                      <tr key={a.id} className="cursor-pointer">
-                        <td style={{ fontWeight: 600 }}>{a.structure}</td>
-                        <td className="hidden sm:table-cell">
-                          <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium ${TYPE_BADGE[a.typeKey]}`}>
-                            {a.type}
-                          </span>
-                        </td>
-                        <td className="amount">{fmt(a.montant)}</td>
-                        <td>
-                          <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium ${ETAPE_BADGE[a.etape]}`}>
-                            {a.etape}
-                          </span>
-                        </td>
+              {dernieresAffaires.length === 0 ? (
+                <p className="p-6 text-sm text-center" style={{ color: "rgba(255,255,255,0.35)" }}>
+                  Aucune affaire pour l&apos;instant
+                </p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="table-glass">
+                    <thead>
+                      <tr>
+                        <th>Structure</th>
+                        <th className="hidden sm:table-cell">Type projet</th>
+                        <th className="right">Montant</th>
+                        <th>Étape</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {dernieresAffaires.map((a) => (
+                        <tr key={a.id} className="cursor-pointer">
+                          <td style={{ fontWeight: 600 }}>{a.structure}</td>
+                          <td className="hidden sm:table-cell">
+                            <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium ${TYPE_BADGE[a.type_projet] ?? ""}`}>
+                              {a.type_projet}
+                            </span>
+                          </td>
+                          <td className="amount">{fmt(a.montant_estime ?? 0)}</td>
+                          <td>
+                            <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium ${ETAPE_BADGE[a.etape] ?? ""}`}>
+                              {a.etape}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
 
             {/* To-do du jour */}
             <div className="glass overflow-hidden">
               <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
-                <h2 className="font-semibold" style={{ color: "#f1f5f9" }}>To-do du jour</h2>
+                <h2 className="font-semibold" style={{ color: "#f1f5f9" }}>To-do</h2>
                 <span
                   className="text-xs px-2 py-0.5 rounded-full font-medium"
                   style={{ background: "rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.5)" }}
                 >
-                  {todos.filter((t) => t.fait).length}/{todos.length}
+                  {todos.filter(t => t.fait).length}/{todos.length}
                 </span>
               </div>
-              <ul className="p-5 space-y-3">
-                {todos.map((todo) => (
-                  <li
-                    key={todo.id}
-                    onClick={() => setTodos((p) => p.map((t) => t.id === todo.id ? { ...t, fait: !t.fait } : t))}
-                    className="flex items-start gap-3 cursor-pointer group"
-                  >
-                    {todo.fait
-                      ? <CheckSquare size={17} className="shrink-0 mt-0.5" style={{ color: "#10b981" }} />
-                      : <Square size={17} className="shrink-0 mt-0.5 transition-colors" style={{ color: "rgba(255,255,255,0.25)" }} />
-                    }
-                    <span
-                      className="text-sm leading-snug"
-                      style={{ color: todo.fait ? "rgba(255,255,255,0.3)" : "rgba(255,255,255,0.75)", textDecoration: todo.fait ? "line-through" : "none" }}
+              {todos.length === 0 ? (
+                <p className="p-6 text-sm text-center" style={{ color: "rgba(255,255,255,0.35)" }}>
+                  Aucune tâche
+                </p>
+              ) : (
+                <ul className="p-5 space-y-3">
+                  {todos.map((todo) => (
+                    <li
+                      key={todo.id}
+                      onClick={() => toggleTodo(todo.id, todo.fait)}
+                      className="flex items-start gap-3 cursor-pointer group"
                     >
-                      {todo.texte}
-                    </span>
-                  </li>
-                ))}
-              </ul>
+                      {todo.fait
+                        ? <CheckSquare size={17} className="shrink-0 mt-0.5" style={{ color: "#10b981" }} />
+                        : <Square size={17} className="shrink-0 mt-0.5 transition-colors" style={{ color: "rgba(255,255,255,0.25)" }} />
+                      }
+                      <span
+                        className="text-sm leading-snug"
+                        style={{
+                          color: todo.fait ? "rgba(255,255,255,0.3)" : "rgba(255,255,255,0.75)",
+                          textDecoration: todo.fait ? "line-through" : "none",
+                        }}
+                      >
+                        {todo.texte}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </div>
 
@@ -264,19 +318,12 @@ export default function DashboardPage() {
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5" style={{ borderTop: "none" }}>
               {pipeline.map((p, i) => {
-                const pct = Math.round((p.ca / metriques.pipelineTotal) * 100)
-                const gradients = [
-                  "from-sky-400 to-sky-600",
-                  "from-amber-400 to-amber-600",
-                  "from-blue-400 to-blue-600",
-                  "from-violet-400 to-violet-600",
-                  "from-emerald-400 to-emerald-600",
-                ]
+                const pct = pipelineTotal > 0 ? Math.round((p.ca / pipelineTotal) * 100) : 0
                 return (
                   <div
                     key={p.etape}
                     className="px-5 py-5 flex flex-col gap-2"
-                    style={{ borderRight: i < 4 ? "1px solid rgba(255,255,255,0.06)" : "none" }}
+                    style={{ borderRight: i < ETAPES_PIPELINE.length - 1 ? "1px solid rgba(255,255,255,0.06)" : "none" }}
                   >
                     <span style={{ fontSize: "11px", color: "rgba(255,255,255,0.4)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>
                       {p.etape}
@@ -285,7 +332,7 @@ export default function DashboardPage() {
                     <p className="text-sm font-medium" style={{ color: "rgba(255,255,255,0.55)" }}>{fmt(p.ca)}</p>
                     <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.08)" }}>
                       <div
-                        className={`h-full rounded-full bg-gradient-to-r ${gradients[i]} transition-all duration-700`}
+                        className={`h-full rounded-full bg-gradient-to-r ${PIPELINE_GRADIENTS[i]} transition-all duration-700`}
                         style={{ width: `${pct}%` }}
                       />
                     </div>

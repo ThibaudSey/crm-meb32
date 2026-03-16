@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect, useCallback } from "react"
 import {
   Receipt, Car, Plus, Eye, Pencil, Trash2, Download,
   Printer, ChevronLeft, ChevronRight, Settings, X,
@@ -8,45 +8,11 @@ import {
 } from "lucide-react"
 import Sidebar from "@/components/Sidebar"
 import TopBar from "@/components/TopBar"
+import LoadingSpinner from "@/components/LoadingSpinner"
+import ErrorMessage from "@/components/ErrorMessage"
 import { exportToCSV, fmtDateExport } from "@/lib/export"
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-interface FraisEntry {
-  id: string
-  date: string
-  categorie: string
-  description: string
-  affaire_id: string | null
-  montant_ttc: number
-  montant_ht: number | null
-  tva: number | null
-  justificatif_url: string | null
-}
-
-interface KmEntry {
-  id: string
-  date: string
-  depart: string
-  arrivee: string
-  km: number
-  aller_retour: boolean
-  motif: string
-  affaire_id: string | null
-  vehicule: string
-  puissance_fiscale: number
-  taux_ik: number
-  indemnite: number
-}
-
-interface Vehicule {
-  id: string
-  nom: string
-  immatriculation: string
-  puissance_fiscale: number
-  type_vehicule: string
-  est_defaut: boolean
-}
+import { supabase } from "@/lib/supabase"
+import type { FraisEntry, KmEntry, Vehicule, Affaire } from "@/lib/types"
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -58,12 +24,6 @@ const CATEGORIES = [
   { value: "Hôtel",            label: "Hôtel",      icon: "🏨" },
   { value: "Matériel",         label: "Matériel",   icon: "📦" },
   { value: "Autre",            label: "Autre",      icon: "❓" },
-]
-
-const AFFAIRES_MOCK = [
-  { id: "AF-001", nom: "Ferme Martin – Poulailler 4000" },
-  { id: "AF-002", nom: "GAEC Dubois – Extension bâtiment" },
-  { id: "AF-003", nom: "Earl Lefebvre – Télégestion" },
 ]
 
 const IK_RATES: Record<number, number> = {
@@ -81,26 +41,6 @@ const BAREME_IK_2025 = [
 const MONTHS_FR = [
   "Janvier","Février","Mars","Avril","Mai","Juin",
   "Juillet","Août","Septembre","Octobre","Novembre","Décembre",
-]
-
-// ─── Mock data ────────────────────────────────────────────────────────────────
-
-const INIT_FRAIS: FraisEntry[] = [
-  { id: "f1", date: "2026-03-14", categorie: "Repas/Restaurant", description: "Déjeuner client – Ferme Martin", affaire_id: "AF-001", montant_ttc: 45.80, montant_ht: 38.17, tva: 7.63, justificatif_url: null },
-  { id: "f2", date: "2026-03-12", categorie: "Carburant",        description: "Station Total A64",             affaire_id: null,     montant_ttc: 82.50, montant_ht: 68.75, tva: 13.75, justificatif_url: null },
-  { id: "f3", date: "2026-03-10", categorie: "Péage",            description: "Autoroute A62 Bordeaux",        affaire_id: "AF-003", montant_ttc: 12.40, montant_ht: 12.40, tva: 0,     justificatif_url: null },
-  { id: "f4", date: "2026-03-08", categorie: "Parking",          description: "Parking Mérignac",              affaire_id: null,     montant_ttc: 8.00,  montant_ht: 8.00,  tva: 0,     justificatif_url: null },
-  { id: "f5", date: "2026-03-05", categorie: "Repas/Restaurant", description: "Déjeuner visite chantier",      affaire_id: "AF-002", montant_ttc: 28.40, montant_ht: 23.67, tva: 4.73,  justificatif_url: null },
-]
-
-const INIT_KM: KmEntry[] = [
-  { id: "k1", date: "2026-03-14", depart: "Auch (32)", arrivee: "Agen (47)",      km: 90,  aller_retour: true, motif: "Visite client Ferme Martin",  affaire_id: "AF-001", vehicule: "Peugeot 308", puissance_fiscale: 5, taux_ik: 0.636, indemnite: 57.24  },
-  { id: "k2", date: "2026-03-10", depart: "Auch (32)", arrivee: "Bordeaux (33)",  km: 180, aller_retour: true, motif: "Démonstration matériel",       affaire_id: "AF-003", vehicule: "Peugeot 308", puissance_fiscale: 5, taux_ik: 0.636, indemnite: 114.48 },
-  { id: "k3", date: "2026-03-05", depart: "Auch (32)", arrivee: "Toulouse (31)",  km: 120, aller_retour: true, motif: "Réunion fournisseur SKOV",     affaire_id: null,     vehicule: "Peugeot 308", puissance_fiscale: 5, taux_ik: 0.636, indemnite: 76.32  },
-]
-
-const INIT_VEHICULES: Vehicule[] = [
-  { id: "v1", nom: "Peugeot 308", immatriculation: "AB-123-CD", puissance_fiscale: 5, type_vehicule: "thermique", est_defaut: true },
 ]
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -169,14 +109,14 @@ function exportKmCSV(km: KmEntry[]) {
   )
 }
 
-function exportCSV(frais: FraisEntry[], km: KmEntry[], month: number, year: number) {
+function exportCSV(frais: FraisEntry[], km: KmEntry[], month: number, year: number, affaires: Pick<Affaire, "id" | "structure">[]) {
   let csv = "Type,Date,Description,Affaire,Montant TTC,Catégorie / Véhicule,Détail\n"
   frais.forEach(f => {
-    const aff = AFFAIRES_MOCK.find(a => a.id === f.affaire_id)?.nom ?? ""
+    const aff = affaires.find(a => a.id === f.affaire_id)?.structure ?? ""
     csv += `Frais,${f.date},"${f.description}","${aff}",${f.montant_ttc},"${f.categorie}",""\n`
   })
   km.forEach(k => {
-    const aff = AFFAIRES_MOCK.find(a => a.id === k.affaire_id)?.nom ?? ""
+    const aff = affaires.find(a => a.id === k.affaire_id)?.structure ?? ""
     csv += `Kilométrique,${k.date},"${k.depart} → ${k.arrivee}","${aff}",${k.indemnite},"${k.vehicule} (${k.puissance_fiscale}CV)","${k.km}km × ${k.taux_ik}€/km"\n`
   })
   const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" })
@@ -192,22 +132,54 @@ function exportCSV(frais: FraisEntry[], km: KmEntry[], month: number, year: numb
 
 export default function FraisPage() {
   const [tab, setTab] = useState<"frais" | "km">("frais")
-  const [month, setMonth] = useState(3)
-  const [year, setYear] = useState(2026)
+  const [month, setMonth] = useState(() => new Date().getMonth() + 1)
+  const [year, setYear]   = useState(() => new Date().getFullYear())
 
-  const [fraisList, setFraisList] = useState<FraisEntry[]>(INIT_FRAIS)
-  const [kmList, setKmList] = useState<KmEntry[]>(INIT_KM)
-  const [vehicules, setVehicules] = useState<Vehicule[]>(INIT_VEHICULES)
+  const [fraisList, setFraisList]   = useState<FraisEntry[]>([])
+  const [kmList, setKmList]         = useState<KmEntry[]>([])
+  const [vehicules, setVehicules]   = useState<Vehicule[]>([])
+  const [affaires, setAffaires]     = useState<Pick<Affaire, "id" | "structure">[]>([])
+  const [loading, setLoading]       = useState(true)
+  const [error, setError]           = useState<string | null>(null)
 
   const [showAddFrais, setShowAddFrais] = useState(false)
-  const [showAddKm, setShowAddKm] = useState(false)
+  const [showAddKm, setShowAddKm]       = useState(false)
   const [showSettings, setShowSettings] = useState(false)
-  const [showRecap, setShowRecap] = useState(false)
-  const [showPrint, setShowPrint] = useState(false)
+  const [showRecap, setShowRecap]       = useState(false)
+  const [showPrint, setShowPrint]       = useState(false)
   const [photoPreview, setPhotoPreview] = useState<string | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: "frais" | "km"; id: string } | null>(null)
-  const [editFrais, setEditFrais] = useState<FraisEntry | null>(null)
+  const [editFrais, setEditFrais]       = useState<FraisEntry | null>(null)
 
+  // ── Fetch ──────────────────────────────────────────────────────────────────
+  const fetchData = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const [fraisRes, kmRes, vehiculesRes, affairesRes] = await Promise.all([
+        supabase.from("frais").select("*").order("date", { ascending: false }),
+        supabase.from("km_entries").select("*").order("date", { ascending: false }),
+        supabase.from("vehicules").select("*"),
+        supabase.from("affaires").select("id, structure").order("structure"),
+      ])
+      if (fraisRes.error)   throw fraisRes.error
+      if (kmRes.error)      throw kmRes.error
+      // vehicules: graceful fallback if table doesn't exist
+      if (!vehiculesRes.error) setVehicules(vehiculesRes.data || [])
+      if (affairesRes.error) throw affairesRes.error
+      setFraisList(fraisRes.data || [])
+      setKmList(kmRes.data || [])
+      setAffaires(affairesRes.data || [])
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Erreur inconnue")
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { fetchData() }, [fetchData])
+
+  // ── Filtered ───────────────────────────────────────────────────────────────
   const filteredFrais = fraisList.filter(f => {
     const [y, m] = f.date.split("-").map(Number)
     return y === year && m === month
@@ -217,9 +189,9 @@ export default function FraisPage() {
     return y === year && m === month
   })
 
-  const totalFrais = filteredFrais.reduce((s, f) => s + f.montant_ttc, 0)
-  const totalKm = filteredKm.reduce((s, k) => s + k.km, 0)
-  const totalIndemnites = filteredKm.reduce((s, k) => s + k.indemnite, 0)
+  const totalFrais        = filteredFrais.reduce((s, f) => s + f.montant_ttc, 0)
+  const totalKm           = filteredKm.reduce((s, k) => s + k.km, 0)
+  const totalIndemnites   = filteredKm.reduce((s, k) => s + k.indemnite, 0)
   const totalRemboursable = totalFrais + totalIndemnites
 
   const catBreakdown = CATEGORIES.map(c => ({
@@ -236,18 +208,59 @@ export default function FraisPage() {
     else setMonth(m => m + 1)
   }
 
-  function handleSaveFrais(f: FraisEntry) {
-    if (editFrais) setFraisList(l => l.map(x => x.id === f.id ? f : x))
-    else setFraisList(l => [...l, f])
+  // ── Save frais ─────────────────────────────────────────────────────────────
+  async function handleSaveFrais(f: FraisEntry) {
+    if (editFrais) {
+      const { id, created_at, ...rest } = f
+      void created_at
+      const { error: updateError } = await supabase
+        .from("frais")
+        .update(rest)
+        .eq("id", id)
+      if (updateError) { setError(updateError.message); return }
+    } else {
+      const { date, categorie, description, affaire_id, montant_ttc, montant_ht, tva } = f
+      const { error: insertError } = await supabase
+        .from("frais")
+        .insert({ date, categorie, description, affaire_id, montant_ttc, montant_ht, tva })
+        .select()
+        .single()
+      if (insertError) { setError(insertError.message); return }
+    }
     setShowAddFrais(false)
     setEditFrais(null)
+    await fetchData()
   }
 
-  function handleDelete() {
+  // ── Save km ────────────────────────────────────────────────────────────────
+  async function handleSaveKm(k: KmEntry) {
+    const { date, depart, arrivee, km, aller_retour, motif, affaire_id, vehicule, puissance_fiscale, taux_ik, indemnite } = k
+    const { error: insertError } = await supabase
+      .from("km_entries")
+      .insert({ date, depart, arrivee, km, aller_retour, motif, affaire_id, vehicule, puissance_fiscale, taux_ik, indemnite })
+      .select()
+      .single()
+    if (insertError) { setError(insertError.message); return }
+    setShowAddKm(false)
+    await fetchData()
+  }
+
+  // ── Delete ─────────────────────────────────────────────────────────────────
+  async function handleDelete() {
     if (!deleteConfirm) return
-    if (deleteConfirm.type === "frais") setFraisList(l => l.filter(f => f.id !== deleteConfirm.id))
-    else setKmList(l => l.filter(k => k.id !== deleteConfirm.id))
+    const table = deleteConfirm.type === "frais" ? "frais" : "km_entries"
+    const { error: deleteError } = await supabase
+      .from(table)
+      .delete()
+      .eq("id", deleteConfirm.id)
+    if (deleteError) { setError(deleteError.message); return }
     setDeleteConfirm(null)
+    await fetchData()
+  }
+
+  // ── Settings vehicules ─────────────────────────────────────────────────────
+  async function handleVehiculesChange(updated: Vehicule[]) {
+    setVehicules(updated)
   }
 
   return (
@@ -279,6 +292,8 @@ export default function FraisPage() {
         } />
 
         <main className="flex-1 p-5 md:p-6 pb-20 md:pb-8 space-y-5">
+
+          {error && <ErrorMessage message={error} />}
 
           {/* ── Zone haute : saisie rapide ── */}
           {/* Mobile : 2 gros boutons côte à côte */}
@@ -342,7 +357,7 @@ export default function FraisPage() {
                 <ChevronRight size={18} />
               </button>
               <button
-                onClick={() => { setMonth(3); setYear(2026) }}
+                onClick={() => { setMonth(new Date().getMonth() + 1); setYear(new Date().getFullYear()) }}
                 className="text-xs px-3 py-1.5 rounded-lg transition-all"
                 style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.5)" }}
                 onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.1)")}
@@ -370,148 +385,154 @@ export default function FraisPage() {
               ))}
             </div>
 
-            {/* Tableau frais */}
-            {tab === "frais" && (
-              <div className="overflow-x-auto">
-                {filteredFrais.length === 0 ? (
-                  <div className="py-12 text-center text-sm" style={{ color: "rgba(255,255,255,0.3)" }}>
-                    Aucun frais ce mois — cliquez sur &quot;Ajouter un frais&quot;
+            {loading ? (
+              <LoadingSpinner />
+            ) : (
+              <>
+                {/* Tableau frais */}
+                {tab === "frais" && (
+                  <div className="overflow-x-auto">
+                    {filteredFrais.length === 0 ? (
+                      <div className="py-12 text-center text-sm" style={{ color: "rgba(255,255,255,0.3)" }}>
+                        Aucun frais ce mois — cliquez sur &quot;Ajouter un frais&quot;
+                      </div>
+                    ) : (
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+                            {["Date", "Catégorie", "Description", "Affaire", "Montant TTC", "Justif.", ""].map(h => (
+                              <th key={h} className="text-left py-2 px-3 text-xs font-medium" style={{ color: "rgba(255,255,255,0.35)" }}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {[...filteredFrais].sort((a, b) => b.date.localeCompare(a.date)).map(f => {
+                            const cc = catConfig(f.categorie)
+                            return (
+                              <tr key={f.id} className="hover:bg-white/[0.03] transition-colors" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                                <td className="py-2.5 px-3 text-xs" style={{ color: "rgba(255,255,255,0.55)" }}>
+                                  {f.date.split("-").reverse().join("/")}
+                                </td>
+                                <td className="py-2.5 px-3">
+                                  <span className="flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-full w-fit"
+                                    style={{ background: "rgba(99,102,241,0.15)", color: "#a5b4fc", border: "1px solid rgba(99,102,241,0.25)" }}>
+                                    {cc.icon} {cc.label}
+                                  </span>
+                                </td>
+                                <td className="py-2.5 px-3 text-sm" style={{ color: "#f1f5f9" }}>{f.description}</td>
+                                <td className="py-2.5 px-3 text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>
+                                  {f.affaire_id ? (affaires.find(a => a.id === f.affaire_id)?.structure ?? f.affaire_id) : "—"}
+                                </td>
+                                <td className="py-2.5 px-3 font-semibold text-right" style={{ color: "#f1f5f9" }}>
+                                  {fmt(f.montant_ttc)}
+                                </td>
+                                <td className="py-2.5 px-3 text-center">
+                                  {f.justificatif_url ? (
+                                    <button onClick={() => setPhotoPreview(f.justificatif_url!)}
+                                      className="p-1.5 rounded-lg hover:bg-white/10 transition-all" style={{ color: "#a5b4fc" }}>
+                                      <Eye size={14} />
+                                    </button>
+                                  ) : (
+                                    <span style={{ color: "rgba(255,255,255,0.15)" }}>—</span>
+                                  )}
+                                </td>
+                                <td className="py-2.5 px-3">
+                                  <div className="flex gap-1">
+                                    <button onClick={() => { setEditFrais(f); setShowAddFrais(true) }}
+                                      className="p-1.5 rounded-lg hover:bg-white/10 transition-all" style={{ color: "rgba(255,255,255,0.4)" }}>
+                                      <Pencil size={13} />
+                                    </button>
+                                    <button onClick={() => setDeleteConfirm({ type: "frais", id: f.id })}
+                                      className="p-1.5 rounded-lg hover:bg-red-500/20 transition-all" style={{ color: "rgba(255,255,255,0.4)" }}>
+                                      <Trash2 size={13} />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                        <tfoot>
+                          <tr style={{ borderTop: "1px solid rgba(255,255,255,0.1)" }}>
+                            <td colSpan={4} className="py-3 px-3 text-xs font-semibold" style={{ color: "rgba(255,255,255,0.5)" }}>
+                              Total du mois
+                            </td>
+                            <td className="py-3 px-3 font-bold text-right text-base" style={{ color: "#a5b4fc" }}>
+                              {fmt(totalFrais)}
+                            </td>
+                            <td colSpan={2} />
+                          </tr>
+                        </tfoot>
+                      </table>
+                    )}
                   </div>
-                ) : (
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-                        {["Date", "Catégorie", "Description", "Affaire", "Montant TTC", "Justif.", ""].map(h => (
-                          <th key={h} className="text-left py-2 px-3 text-xs font-medium" style={{ color: "rgba(255,255,255,0.35)" }}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {[...filteredFrais].sort((a, b) => b.date.localeCompare(a.date)).map(f => {
-                        const cc = catConfig(f.categorie)
-                        return (
-                          <tr key={f.id} className="hover:bg-white/[0.03] transition-colors" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-                            <td className="py-2.5 px-3 text-xs" style={{ color: "rgba(255,255,255,0.55)" }}>
-                              {f.date.split("-").reverse().join("/")}
-                            </td>
-                            <td className="py-2.5 px-3">
-                              <span className="flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-full w-fit"
-                                style={{ background: "rgba(99,102,241,0.15)", color: "#a5b4fc", border: "1px solid rgba(99,102,241,0.25)" }}>
-                                {cc.icon} {cc.label}
-                              </span>
-                            </td>
-                            <td className="py-2.5 px-3 text-sm" style={{ color: "#f1f5f9" }}>{f.description}</td>
-                            <td className="py-2.5 px-3 text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>
-                              {f.affaire_id ? (AFFAIRES_MOCK.find(a => a.id === f.affaire_id)?.nom ?? f.affaire_id) : "—"}
-                            </td>
-                            <td className="py-2.5 px-3 font-semibold text-right" style={{ color: "#f1f5f9" }}>
-                              {fmt(f.montant_ttc)}
-                            </td>
-                            <td className="py-2.5 px-3 text-center">
-                              {f.justificatif_url ? (
-                                <button onClick={() => setPhotoPreview(f.justificatif_url!)}
-                                  className="p-1.5 rounded-lg hover:bg-white/10 transition-all" style={{ color: "#a5b4fc" }}>
-                                  <Eye size={14} />
-                                </button>
-                              ) : (
-                                <span style={{ color: "rgba(255,255,255,0.15)" }}>—</span>
-                              )}
-                            </td>
-                            <td className="py-2.5 px-3">
-                              <div className="flex gap-1">
-                                <button onClick={() => { setEditFrais(f); setShowAddFrais(true) }}
-                                  className="p-1.5 rounded-lg hover:bg-white/10 transition-all" style={{ color: "rgba(255,255,255,0.4)" }}>
-                                  <Pencil size={13} />
-                                </button>
-                                <button onClick={() => setDeleteConfirm({ type: "frais", id: f.id })}
+                )}
+
+                {/* Tableau km */}
+                {tab === "km" && (
+                  <div className="overflow-x-auto">
+                    {filteredKm.length === 0 ? (
+                      <div className="py-12 text-center text-sm" style={{ color: "rgba(255,255,255,0.3)" }}>
+                        Aucun trajet ce mois — cliquez sur &quot;Ajouter des kilomètres&quot;
+                      </div>
+                    ) : (
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+                            {["Date", "Trajet", "Affaire", "Km", "Véhicule", "Taux IK", "Indemnité", ""].map(h => (
+                              <th key={h} className="text-left py-2 px-3 text-xs font-medium" style={{ color: "rgba(255,255,255,0.35)" }}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {[...filteredKm].sort((a, b) => b.date.localeCompare(a.date)).map(k => (
+                            <tr key={k.id} className="hover:bg-white/[0.03] transition-colors" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                              <td className="py-2.5 px-3 text-xs" style={{ color: "rgba(255,255,255,0.55)" }}>
+                                {k.date.split("-").reverse().join("/")}
+                              </td>
+                              <td className="py-2.5 px-3" style={{ color: "#f1f5f9" }}>
+                                <span>{k.depart}</span>
+                                <span className="mx-1.5" style={{ color: "rgba(255,255,255,0.3)" }}>→</span>
+                                <span>{k.arrivee}</span>
+                                {k.aller_retour && (
+                                  <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full"
+                                    style={{ background: "rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.4)" }}>
+                                    A/R
+                                  </span>
+                                )}
+                              </td>
+                              <td className="py-2.5 px-3 text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>
+                                {k.affaire_id ? (affaires.find(a => a.id === k.affaire_id)?.structure ?? k.affaire_id) : "—"}
+                              </td>
+                              <td className="py-2.5 px-3 font-medium" style={{ color: "#f1f5f9" }}>{k.km} km</td>
+                              <td className="py-2.5 px-3 text-xs" style={{ color: "rgba(255,255,255,0.55)" }}>{k.vehicule}</td>
+                              <td className="py-2.5 px-3 text-xs" style={{ color: "rgba(255,255,255,0.45)" }}>{k.taux_ik.toFixed(3)} €/km</td>
+                              <td className="py-2.5 px-3 font-semibold text-right" style={{ color: "#10b981" }}>
+                                {fmt(k.indemnite)}
+                              </td>
+                              <td className="py-2.5 px-3">
+                                <button onClick={() => setDeleteConfirm({ type: "km", id: k.id })}
                                   className="p-1.5 rounded-lg hover:bg-red-500/20 transition-all" style={{ color: "rgba(255,255,255,0.4)" }}>
                                   <Trash2 size={13} />
                                 </button>
-                              </div>
-                            </td>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr style={{ borderTop: "1px solid rgba(255,255,255,0.1)" }}>
+                            <td colSpan={3} className="py-3 px-3 text-xs font-semibold" style={{ color: "rgba(255,255,255,0.5)" }}>Total</td>
+                            <td className="py-3 px-3 font-bold" style={{ color: "#f1f5f9" }}>{totalKm} km</td>
+                            <td colSpan={2} />
+                            <td className="py-3 px-3 font-bold text-right" style={{ color: "#10b981" }}>{fmt(totalIndemnites)}</td>
+                            <td />
                           </tr>
-                        )
-                      })}
-                    </tbody>
-                    <tfoot>
-                      <tr style={{ borderTop: "1px solid rgba(255,255,255,0.1)" }}>
-                        <td colSpan={4} className="py-3 px-3 text-xs font-semibold" style={{ color: "rgba(255,255,255,0.5)" }}>
-                          Total du mois
-                        </td>
-                        <td className="py-3 px-3 font-bold text-right text-base" style={{ color: "#a5b4fc" }}>
-                          {fmt(totalFrais)}
-                        </td>
-                        <td colSpan={2} />
-                      </tr>
-                    </tfoot>
-                  </table>
-                )}
-              </div>
-            )}
-
-            {/* Tableau km */}
-            {tab === "km" && (
-              <div className="overflow-x-auto">
-                {filteredKm.length === 0 ? (
-                  <div className="py-12 text-center text-sm" style={{ color: "rgba(255,255,255,0.3)" }}>
-                    Aucun trajet ce mois — cliquez sur &quot;Ajouter des kilomètres&quot;
+                        </tfoot>
+                      </table>
+                    )}
                   </div>
-                ) : (
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-                        {["Date", "Trajet", "Affaire", "Km", "Véhicule", "Taux IK", "Indemnité", ""].map(h => (
-                          <th key={h} className="text-left py-2 px-3 text-xs font-medium" style={{ color: "rgba(255,255,255,0.35)" }}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {[...filteredKm].sort((a, b) => b.date.localeCompare(a.date)).map(k => (
-                        <tr key={k.id} className="hover:bg-white/[0.03] transition-colors" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-                          <td className="py-2.5 px-3 text-xs" style={{ color: "rgba(255,255,255,0.55)" }}>
-                            {k.date.split("-").reverse().join("/")}
-                          </td>
-                          <td className="py-2.5 px-3" style={{ color: "#f1f5f9" }}>
-                            <span>{k.depart}</span>
-                            <span className="mx-1.5" style={{ color: "rgba(255,255,255,0.3)" }}>→</span>
-                            <span>{k.arrivee}</span>
-                            {k.aller_retour && (
-                              <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full"
-                                style={{ background: "rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.4)" }}>
-                                A/R
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-2.5 px-3 text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>
-                            {k.affaire_id ? (AFFAIRES_MOCK.find(a => a.id === k.affaire_id)?.nom ?? k.affaire_id) : "—"}
-                          </td>
-                          <td className="py-2.5 px-3 font-medium" style={{ color: "#f1f5f9" }}>{k.km} km</td>
-                          <td className="py-2.5 px-3 text-xs" style={{ color: "rgba(255,255,255,0.55)" }}>{k.vehicule}</td>
-                          <td className="py-2.5 px-3 text-xs" style={{ color: "rgba(255,255,255,0.45)" }}>{k.taux_ik.toFixed(3)} €/km</td>
-                          <td className="py-2.5 px-3 font-semibold text-right" style={{ color: "#10b981" }}>
-                            {fmt(k.indemnite)}
-                          </td>
-                          <td className="py-2.5 px-3">
-                            <button onClick={() => setDeleteConfirm({ type: "km", id: k.id })}
-                              className="p-1.5 rounded-lg hover:bg-red-500/20 transition-all" style={{ color: "rgba(255,255,255,0.4)" }}>
-                              <Trash2 size={13} />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                    <tfoot>
-                      <tr style={{ borderTop: "1px solid rgba(255,255,255,0.1)" }}>
-                        <td colSpan={3} className="py-3 px-3 text-xs font-semibold" style={{ color: "rgba(255,255,255,0.5)" }}>Total</td>
-                        <td className="py-3 px-3 font-bold" style={{ color: "#f1f5f9" }}>{totalKm} km</td>
-                        <td colSpan={2} />
-                        <td className="py-3 px-3 font-bold text-right" style={{ color: "#10b981" }}>{fmt(totalIndemnites)}</td>
-                        <td />
-                      </tr>
-                    </tfoot>
-                  </table>
                 )}
-              </div>
+              </>
             )}
           </div>
 
@@ -582,7 +603,7 @@ export default function FraisPage() {
                 <BarChart3 size={15} /> 📊 Récap mensuel complet
               </button>
               <button
-                onClick={() => exportCSV(filteredFrais, filteredKm, month, year)}
+                onClick={() => exportCSV(filteredFrais, filteredKm, month, year, affaires)}
                 className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all"
                 style={{ background: "rgba(16,185,129,0.12)", border: "1px solid rgba(16,185,129,0.25)", color: "#6ee7b7" }}
                 onMouseEnter={e => (e.currentTarget.style.background = "rgba(16,185,129,0.22)")}
@@ -608,6 +629,7 @@ export default function FraisPage() {
       {showAddFrais && (
         <AddFraisModal
           initial={editFrais}
+          affaires={affaires}
           onClose={() => { setShowAddFrais(false); setEditFrais(null) }}
           onSave={handleSaveFrais}
         />
@@ -615,15 +637,17 @@ export default function FraisPage() {
       {showAddKm && (
         <AddKmModal
           vehicules={vehicules}
+          affaires={affaires}
           onClose={() => setShowAddKm(false)}
-          onSave={k => { setKmList(l => [...l, k]); setShowAddKm(false) }}
+          onSave={handleSaveKm}
         />
       )}
       {showSettings && (
         <SettingsModal
           vehicules={vehicules}
           onClose={() => setShowSettings(false)}
-          onChange={setVehicules}
+          onChange={handleVehiculesChange}
+          onRefresh={fetchData}
         />
       )}
       {showRecap && (
@@ -639,6 +663,7 @@ export default function FraisPage() {
           frais={filteredFrais} km={filteredKm}
           month={month} year={year}
           totalFrais={totalFrais} totalKm={totalKm} totalIndemnites={totalIndemnites}
+          affaires={affaires}
           onClose={() => setShowPrint(false)}
         />
       )}
@@ -680,10 +705,12 @@ export default function FraisPage() {
 
 function AddFraisModal({
   initial,
+  affaires,
   onClose,
   onSave,
 }: {
   initial: FraisEntry | null
+  affaires: Pick<Affaire, "id" | "structure">[]
   onClose: () => void
   onSave: (f: FraisEntry) => void
 }) {
@@ -758,14 +785,15 @@ function AddFraisModal({
   function handleSave() {
     if (!form.montant_ttc || !form.date) return
     onSave({
-      id:             initial?.id ?? `f${Date.now()}`,
-      date:           form.date,
-      categorie:      form.categorie,
-      description:    form.description,
-      affaire_id:     form.affaire_id || null,
-      montant_ttc:    parseFloat(form.montant_ttc),
-      montant_ht:     form.montant_ht ? parseFloat(form.montant_ht) : null,
-      tva:            form.tva ? parseFloat(form.tva) : null,
+      id:               initial?.id ?? `f${Date.now()}`,
+      created_at:       initial?.created_at ?? new Date().toISOString(),
+      date:             form.date,
+      categorie:        form.categorie,
+      description:      form.description,
+      affaire_id:       form.affaire_id || null,
+      montant_ttc:      parseFloat(form.montant_ttc),
+      montant_ht:       form.montant_ht ? parseFloat(form.montant_ht) : null,
+      tva:              form.tva ? parseFloat(form.tva) : null,
       justificatif_url: imageData,
     })
   }
@@ -855,7 +883,7 @@ function AddFraisModal({
             <label className="block text-xs mb-1.5" style={{ color: "rgba(255,255,255,0.5)" }}>Affaire liée (optionnel)</label>
             <select className="select-glass w-full" value={form.affaire_id} onChange={e => setF("affaire_id", e.target.value)}>
               <option value="">— Aucune affaire —</option>
-              {AFFAIRES_MOCK.map(a => <option key={a.id} value={a.id}>{a.nom}</option>)}
+              {affaires.map(a => <option key={a.id} value={a.id}>{a.structure}</option>)}
             </select>
           </div>
 
@@ -886,10 +914,12 @@ function AddFraisModal({
 
 function AddKmModal({
   vehicules,
+  affaires,
   onClose,
   onSave,
 }: {
   vehicules: Vehicule[]
+  affaires: Pick<Affaire, "id" | "structure">[]
   onClose: () => void
   onSave: (k: KmEntry) => void
 }) {
@@ -918,17 +948,18 @@ function AddKmModal({
   function handleSave() {
     if (!canSave) return
     onSave({
-      id:               `k${Date.now()}`,
-      date:             form.date,
-      depart:           form.depart,
-      arrivee:          form.arrivee,
-      km:               kmTotal,
-      aller_retour:     form.aller_retour,
-      motif:            form.motif,
-      affaire_id:       form.affaire_id || null,
-      vehicule:         selectedV?.nom ?? "",
+      id:                `k${Date.now()}`,
+      created_at:        new Date().toISOString(),
+      date:              form.date,
+      depart:            form.depart,
+      arrivee:           form.arrivee,
+      km:                kmTotal,
+      aller_retour:      form.aller_retour,
+      motif:             form.motif,
+      affaire_id:        form.affaire_id || null,
+      vehicule:          selectedV?.nom ?? "",
       puissance_fiscale: cv,
-      taux_ik:          rate,
+      taux_ik:           rate,
       indemnite,
     })
   }
@@ -987,7 +1018,7 @@ function AddKmModal({
             <label className="block text-xs mb-1.5" style={{ color: "rgba(255,255,255,0.5)" }}>Affaire liée (optionnel)</label>
             <select className="select-glass w-full" value={form.affaire_id} onChange={e => setF("affaire_id", e.target.value)}>
               <option value="">— Aucune affaire —</option>
-              {AFFAIRES_MOCK.map(a => <option key={a.id} value={a.id}>{a.nom}</option>)}
+              {affaires.map(a => <option key={a.id} value={a.id}>{a.structure}</option>)}
             </select>
           </div>
 
@@ -1044,34 +1075,46 @@ function SettingsModal({
   vehicules,
   onClose,
   onChange,
+  onRefresh,
 }: {
   vehicules: Vehicule[]
   onClose: () => void
   onChange: (v: Vehicule[]) => void
+  onRefresh: () => Promise<void>
 }) {
   const [list, setList] = useState<Vehicule[]>(vehicules)
   const [showAdd, setShowAdd] = useState(false)
   const [newV, setNewV] = useState({ nom: "", immatriculation: "", puissance_fiscale: 5, type_vehicule: "thermique" })
 
-  function updateList(updated: Vehicule[]) {
+  async function updateList(updated: Vehicule[]) {
     setList(updated)
     onChange(updated)
   }
 
-  function addVehicule() {
+  async function addVehicule() {
     if (!newV.nom) return
-    const v: Vehicule = { ...newV, id: `v${Date.now()}`, est_defaut: list.length === 0 }
-    updateList([...list, v])
+    const payload = { ...newV, est_defaut: list.length === 0 }
+    const { data, error } = await supabase.from("vehicules").insert([payload]).select().single()
+    if (error) { console.error(error); return }
+    const updated = [...list, data as Vehicule]
+    await updateList(updated)
     setShowAdd(false)
     setNewV({ nom: "", immatriculation: "", puissance_fiscale: 5, type_vehicule: "thermique" })
+    await onRefresh()
   }
 
-  function setDefault(id: string) {
-    updateList(list.map(v => ({ ...v, est_defaut: v.id === id })))
+  async function setDefault(id: string) {
+    for (const v of list) {
+      await supabase.from("vehicules").update({ est_defaut: v.id === id }).eq("id", v.id)
+    }
+    await updateList(list.map(v => ({ ...v, est_defaut: v.id === id })))
+    await onRefresh()
   }
 
-  function removeVehicule(id: string) {
-    updateList(list.filter(v => v.id !== id))
+  async function removeVehicule(id: string) {
+    await supabase.from("vehicules").delete().eq("id", id)
+    await updateList(list.filter(v => v.id !== id))
+    await onRefresh()
   }
 
   return (
@@ -1314,11 +1357,12 @@ function RecapModal({
 // ─── Modal : Note de frais imprimable ────────────────────────────────────────
 
 function PrintModal({
-  frais, km, month, year, totalFrais, totalKm, totalIndemnites, onClose,
+  frais, km, month, year, totalFrais, totalKm, totalIndemnites, affaires, onClose,
 }: {
   frais: FraisEntry[]; km: KmEntry[]
   month: number; year: number
   totalFrais: number; totalKm: number; totalIndemnites: number
+  affaires: Pick<Affaire, "id" | "structure">[]
   onClose: () => void
 }) {
   return (
@@ -1367,7 +1411,7 @@ function PrintModal({
                       <td className="p-2 border" style={{ borderColor: "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.6)" }}>{f.date.split("-").reverse().join("/")}</td>
                       <td className="p-2 border" style={{ borderColor: "rgba(255,255,255,0.07)", color: "#f1f5f9" }}>{catConfig(f.categorie).icon} {catConfig(f.categorie).label}</td>
                       <td className="p-2 border" style={{ borderColor: "rgba(255,255,255,0.07)", color: "#f1f5f9" }}>{f.description}</td>
-                      <td className="p-2 border" style={{ borderColor: "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.5)" }}>{AFFAIRES_MOCK.find(a => a.id === f.affaire_id)?.nom ?? "—"}</td>
+                      <td className="p-2 border" style={{ borderColor: "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.5)" }}>{affaires.find(a => a.id === f.affaire_id)?.structure ?? "—"}</td>
                       <td className="p-2 border text-right font-semibold" style={{ borderColor: "rgba(255,255,255,0.07)", color: "#f1f5f9" }}>{fmt(f.montant_ttc)}</td>
                     </tr>
                   ))}

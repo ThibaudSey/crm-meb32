@@ -1,51 +1,24 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Plus, Search, ChevronRight, ChevronDown, Download } from "lucide-react"
+import { Plus, Search, ChevronRight, Download } from "lucide-react"
 import Sidebar from "@/components/Sidebar"
 import TopBar from "@/components/TopBar"
+import LoadingSpinner from "@/components/LoadingSpinner"
+import ErrorMessage from "@/components/ErrorMessage"
+import { supabase } from "@/lib/supabase"
+import type { Affaire } from "@/lib/types"
 import { exportToCSV, fmtDateExport } from "@/lib/export"
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── Types locaux ─────────────────────────────────────────────────────────────
 
 type Etape = "Prospection" | "R1 Découverte" | "R2 Proposition" | "Négociation" | "Signé"
 type TypeProjet = "Neuf" | "Rénovation" | "Extension" | "Remplacement"
-type TypeInter = "Éleveur" | "Coopérative" | "Intégrateur"
-type Espece = "Poulet chair" | "Poulet label/bio" | "Dinde" | "Canard" | "Poule pondeuse"
-
-interface Affaire {
-  id: number
-  structure: string
-  etape: Etape
-  typeProjet: TypeProjet
-  espece: Espece
-  nbPlaces: number
-  montant: number
-  marge: number
-  prochaineAction: string
-  typeInter: TypeInter
-  dateDecision: string
-}
-
-// ─── Données fictives ─────────────────────────────────────────────────────────
-
-const AFFAIRES: Affaire[] = [
-  { id: 1,  structure: "EARL Morin",           etape: "R2 Proposition", typeProjet: "Neuf",         espece: "Poulet chair",     nbPlaces: 22000, montant: 48000, marge: 34, prochaineAction: "Relancer sur devis (J+9)",       typeInter: "Éleveur",     dateDecision: "2026-04-15" },
-  { id: 2,  structure: "Gauthier Volailles",    etape: "Négociation",    typeProjet: "Extension",    espece: "Poulet label/bio", nbPlaces: 11000, montant: 32500, marge: 31, prochaineAction: "RDV négociation finale",          typeInter: "Éleveur",     dateDecision: "2026-03-28" },
-  { id: 3,  structure: "SAS Lefèvre Avicole",   etape: "Signé",          typeProjet: "Rénovation",   espece: "Poule pondeuse",   nbPlaces: 30000, montant: 21000, marge: 38, prochaineAction: "Suivi démarrage chantier",        typeInter: "Coopérative", dateDecision: "2026-03-10" },
-  { id: 4,  structure: "GAEC du Bocage",        etape: "R1 Découverte",  typeProjet: "Neuf",         espece: "Dinde",            nbPlaces:  8000, montant: 67000, marge: 36, prochaineAction: "Envoyer plaquette technique",     typeInter: "Intégrateur", dateDecision: "2026-05-20" },
-  { id: 5,  structure: "Ferme Dupont",          etape: "Prospection",    typeProjet: "Remplacement", espece: "Poulet chair",     nbPlaces: 18000, montant: 14200, marge: 29, prochaineAction: "Qualifier le projet par téléphone",typeInter: "Éleveur",     dateDecision: "2026-06-01" },
-  { id: 6,  structure: "Coopérative Arvor",     etape: "R2 Proposition", typeProjet: "Extension",    espece: "Canard",           nbPlaces:  6000, montant: 53000, marge: 33, prochaineAction: "Relance devis (J+3)",             typeInter: "Coopérative", dateDecision: "2026-04-30" },
-  { id: 7,  structure: "SCEA Bretagne Plumes",  etape: "R1 Découverte",  typeProjet: "Neuf",         espece: "Poulet label/bio", nbPlaces:  4500, montant: 89000, marge: 40, prochaineAction: "Visite de site prévue",           typeInter: "Éleveur",     dateDecision: "2026-07-10" },
-  { id: 8,  structure: "Élevages Martin",       etape: "Négociation",    typeProjet: "Rénovation",   espece: "Poule pondeuse",   nbPlaces: 40000, montant: 27500, marge: 30, prochaineAction: "Retravailler offre prix",          typeInter: "Éleveur",     dateDecision: "2026-03-25" },
-  { id: 9,  structure: "EARL Renard & Fils",    etape: "Prospection",    typeProjet: "Neuf",         espece: "Dinde",            nbPlaces: 10000, montant: 74000, marge: 37, prochaineAction: "Premier appel de prise de contact", typeInter: "Intégrateur", dateDecision: "2026-08-01" },
-  { id: 10, structure: "GFA des Charentes",     etape: "R1 Découverte",  typeProjet: "Extension",    espece: "Canard",           nbPlaces:  7500, montant: 38000, marge: 32, prochaineAction: "Envoyer références chantiers",    typeInter: "Coopérative", dateDecision: "2026-05-05" },
-]
 
 // ─── Badge styles ─────────────────────────────────────────────────────────────
 
-const ETAPE_STYLE: Record<Etape, string> = {
+const ETAPE_STYLE: Record<string, string> = {
   "Prospection":    "bg-white/10 border border-white/20 text-white/60",
   "R1 Découverte":  "bg-indigo-500/20 border border-indigo-500/40 text-indigo-300",
   "R2 Proposition": "bg-amber-500/20 border border-amber-500/40 text-amber-300",
@@ -53,7 +26,7 @@ const ETAPE_STYLE: Record<Etape, string> = {
   "Signé":          "bg-emerald-500/20 border border-emerald-500/40 text-emerald-300",
 }
 
-const TYPE_PROJET_STYLE: Record<TypeProjet, string> = {
+const TYPE_PROJET_STYLE: Record<string, string> = {
   Neuf:         "bg-indigo-500/20 border border-indigo-500/40 text-indigo-300",
   Rénovation:   "bg-amber-500/20 border border-amber-500/40 text-amber-300",
   Extension:    "bg-emerald-500/20 border border-emerald-500/40 text-emerald-300",
@@ -68,49 +41,37 @@ function fmt(n: number) {
   return new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 }).format(n) + " €"
 }
 
-function exportAffaires() {
-  exportToCSV(
-    AFFAIRES.map(a => ({
-      structure:    a.structure,
-      typeInter:    a.typeInter,
-      typeProjet:   a.typeProjet,
-      espece:       a.espece,
-      nbPlaces:     a.nbPlaces,
-      montant:      a.montant,
-      marge:        a.marge,
-      etape:        a.etape,
-      concurrent:   "",
-      dateDecision: fmtDateExport(a.dateDecision),
-      probabilite:  "",
-      soncas:       "",
-    })),
-    `affaires-MEB32-${new Date().toISOString().slice(0, 7)}.csv`,
-    [
-      { key: "structure",    label: "Nom affaire"       },
-      { key: "typeInter",    label: "Prospect"          },
-      { key: "typeProjet",   label: "Type projet"       },
-      { key: "espece",       label: "Espèce"            },
-      { key: "nbPlaces",     label: "Nb places"         },
-      { key: "montant",      label: "Montant estimé €"  },
-      { key: "marge",        label: "Marge %"           },
-      { key: "etape",        label: "Étape"             },
-      { key: "concurrent",   label: "Concurrent"        },
-      { key: "dateDecision", label: "Date décision"     },
-      { key: "probabilite",  label: "Probabilité %"     },
-      { key: "soncas",       label: "SONCAS dominant"   },
-    ]
-  )
-}
-
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function AffairesPage() {
   const router = useRouter()
+  const [affaires, setAffaires] = useState<Affaire[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [filtreEtape, setFiltreEtape] = useState<"Toutes" | Etape>("Toutes")
   const [recherche, setRecherche]     = useState("")
   const [navigueVers, setNavigueVers] = useState("")
 
-  const affairesFiltrees = AFFAIRES.filter((a) => {
+  useEffect(() => { fetchAffaires() }, [])
+
+  async function fetchAffaires() {
+    try {
+      setLoading(true)
+      setError(null)
+      const { data, error } = await supabase
+        .from("affaires")
+        .select("*")
+        .order("created_at", { ascending: false })
+      if (error) throw error
+      setAffaires(data || [])
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Erreur lors du chargement des affaires")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const affairesFiltrees = affaires.filter((a) => {
     const matchEtape = filtreEtape === "Toutes" || a.etape === filtreEtape
     const matchRecherche =
       a.structure.toLowerCase().includes(recherche.toLowerCase()) ||
@@ -121,6 +82,66 @@ export default function AffairesPage() {
   function handleSelectNavigate(id: string) {
     setNavigueVers(id)
     if (id) router.push(`/affaires/${id}`)
+  }
+
+  function exportAffaires() {
+    exportToCSV(
+      affaires.map((a) => ({
+        structure:    a.structure,
+        typeInter:    a.type_inter,
+        typeProjet:   a.type_projet,
+        espece:       a.espece,
+        nbPlaces:     a.nb_places,
+        montant:      a.montant_estime,
+        marge:        a.marge,
+        etape:        a.etape,
+        concurrent:   a.concurrent ?? "",
+        dateDecision: fmtDateExport(a.date_decision),
+        probabilite:  "",
+        soncas:       a.soncas ?? "",
+      })),
+      `affaires-MEB32-${new Date().toISOString().slice(0, 7)}.csv`,
+      [
+        { key: "structure",    label: "Nom affaire"       },
+        { key: "typeInter",    label: "Prospect"          },
+        { key: "typeProjet",   label: "Type projet"       },
+        { key: "espece",       label: "Espèce"            },
+        { key: "nbPlaces",     label: "Nb places"         },
+        { key: "montant",      label: "Montant estimé €"  },
+        { key: "marge",        label: "Marge %"           },
+        { key: "etape",        label: "Étape"             },
+        { key: "concurrent",   label: "Concurrent"        },
+        { key: "dateDecision", label: "Date décision"     },
+        { key: "probabilite",  label: "Probabilité %"     },
+        { key: "soncas",       label: "SONCAS dominant"   },
+      ]
+    )
+  }
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen">
+        <Sidebar />
+        <div className="flex-1 md:ml-60 flex flex-col min-h-screen">
+          <TopBar title="Affaires" />
+          <LoadingSpinner />
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex min-h-screen">
+        <Sidebar />
+        <div className="flex-1 md:ml-60 flex flex-col min-h-screen">
+          <TopBar title="Affaires" />
+          <div className="flex-1 p-6">
+            <ErrorMessage message={error} onRetry={fetchAffaires} />
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -189,7 +210,7 @@ export default function AffairesPage() {
               className="select-glass min-w-[220px]"
             >
               <option value="">Accéder à une affaire…</option>
-              {AFFAIRES.map((a) => (
+              {affaires.map((a) => (
                 <option key={a.id} value={a.id}>
                   {a.structure}
                 </option>
@@ -234,7 +255,7 @@ export default function AffairesPage() {
           <p className="text-sm text-white/50">
             {affairesFiltrees.length} affaire{affairesFiltrees.length !== 1 ? "s" : ""} ·{" "}
             <span className="font-medium" style={{ color: "#f1f5f9" }}>
-              {fmt(affairesFiltrees.reduce((s, a) => s + a.montant, 0))} total
+              {fmt(affairesFiltrees.reduce((s, a) => s + (a.montant_estime ?? 0), 0))} total
             </span>
           </p>
 
@@ -254,18 +275,18 @@ export default function AffairesPage() {
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <div>
                     <p className="font-bold text-sm" style={{ color: "#f1f5f9" }}>{a.structure}</p>
-                    <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.4)" }}>{a.typeInter}</p>
+                    <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.4)" }}>{a.type_inter}</p>
                   </div>
                   <span className="text-base font-bold whitespace-nowrap" style={{ color: "#10b981" }}>
-                    {fmt(a.montant)}
+                    {fmt(a.montant_estime ?? 0)}
                   </span>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium ${ETAPE_STYLE[a.etape]}`}>
+                  <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium ${ETAPE_STYLE[a.etape] ?? "bg-white/10 text-white/50"}`}>
                     {a.etape}
                   </span>
-                  <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium ${TYPE_PROJET_STYLE[a.typeProjet]}`}>
-                    {a.typeProjet}
+                  <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium ${TYPE_PROJET_STYLE[a.type_projet] ?? "bg-white/10 text-white/50"}`}>
+                    {a.type_projet}
                   </span>
                   <span className="text-xs ml-auto font-semibold" style={{
                     color: a.marge >= 35 ? "#10b981" : a.marge >= 30 ? "#f59e0b" : "#ef4444"
@@ -274,7 +295,7 @@ export default function AffairesPage() {
                   </span>
                 </div>
                 <p className="text-xs mt-2 pt-2" style={{ color: "rgba(255,255,255,0.4)", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-                  → {a.prochaineAction}
+                  → {a.prochaine_action ?? "—"}
                 </p>
               </div>
             ))}
@@ -305,24 +326,24 @@ export default function AffairesPage() {
                     >
                       <td className="px-5 py-3.5">
                         <div className="font-semibold text-[#f1f5f9]">{a.structure}</div>
-                        <div className="text-xs text-white/50">{a.typeInter}</div>
+                        <div className="text-xs text-white/50">{a.type_inter}</div>
                       </td>
                       <td className="px-4 py-3.5">
-                        <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium ${ETAPE_STYLE[a.etape]}`}>
+                        <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium ${ETAPE_STYLE[a.etape] ?? "bg-white/10 text-white/50"}`}>
                           {a.etape}
                         </span>
                       </td>
                       <td className="px-4 py-3.5 hidden sm:table-cell">
-                        <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium ${TYPE_PROJET_STYLE[a.typeProjet]}`}>
-                          {a.typeProjet}
+                        <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium ${TYPE_PROJET_STYLE[a.type_projet] ?? "bg-white/10 text-white/50"}`}>
+                          {a.type_projet}
                         </span>
                       </td>
                       <td className="px-4 py-3.5 hidden md:table-cell text-white/50 text-xs">
                         {a.espece}
-                        <div className="text-white/35">{a.nbPlaces.toLocaleString("fr-FR")} pl.</div>
+                        <div className="text-white/35">{(a.nb_places ?? 0).toLocaleString("fr-FR")} pl.</div>
                       </td>
                       <td className="px-4 py-3.5 text-right font-bold whitespace-nowrap amount">
-                        {fmt(a.montant)}
+                        {fmt(a.montant_estime ?? 0)}
                       </td>
                       <td className="px-4 py-3.5 text-right hidden lg:table-cell">
                         <span
@@ -335,7 +356,7 @@ export default function AffairesPage() {
                         </span>
                       </td>
                       <td className="px-4 py-3.5 text-xs text-white/50 hidden xl:table-cell max-w-[200px]">
-                        {a.prochaineAction}
+                        {a.prochaine_action ?? "—"}
                       </td>
                       <td className="px-4 py-3.5 text-right">
                         <ChevronRight

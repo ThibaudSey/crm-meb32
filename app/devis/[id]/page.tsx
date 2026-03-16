@@ -1,47 +1,20 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { ArrowLeft, Plus, Trash2, X, Copy, Check, ChevronDown } from "lucide-react"
 import Sidebar from "@/components/Sidebar"
 import TopBar from "@/components/TopBar"
+import LoadingSpinner from "@/components/LoadingSpinner"
+import ErrorMessage from "@/components/ErrorMessage"
+import { supabase } from "@/lib/supabase"
+import type { Devis, DevisLigne, Affaire, Statut } from "@/lib/types"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type Statut = "brouillon" | "envoye" | "accepte" | "refuse" | "expire"
-
-interface Ligne {
-  id: number
-  designation: string
-  qty: number
-  prixUnitaire: number
-  remise: number
-  prixRevient: number
-}
-
 interface PromptPanel { titre: string; contenu: string }
 
-// ─── Données initiales devis DEV-2026-001 (EARL Morin) ───────────────────────
-
-const LIGNES_INIT: Ligne[] = [
-  { id: 1, designation: "Ventilation dynamique tunnel",         qty: 1, prixUnitaire: 12500, remise: 0, prixRevient: 8200 },
-  { id: 2, designation: "Chauffage radiant au sol",             qty: 1, prixUnitaire:  7800, remise: 0, prixRevient: 5100 },
-  { id: 3, designation: "Abreuvoirs nipples ligne complète",    qty: 4, prixUnitaire:  2100, remise: 5, prixRevient: 1350 },
-  { id: 4, designation: "Mangeoires automatiques + trémies",    qty: 2, prixUnitaire:  4200, remise: 0, prixRevient: 2800 },
-  { id: 5, designation: "Télégestion + capteurs ambiance",      qty: 1, prixUnitaire:  3900, remise: 0, prixRevient: 2400 },
-  { id: 6, designation: "Installation + mise en service",       qty: 1, prixUnitaire:  5800, remise: 0, prixRevient: 3800 },
-]
-
-const AFFAIRES_LISTE = [
-  { id: 1,  label: "EARL Morin – Poulailler neuf 22 000 pl."          },
-  { id: 2,  label: "Gauthier Volailles – Extension poulet label"       },
-  { id: 3,  label: "SAS Lefèvre Avicole – Rénovation pondeuses"        },
-  { id: 4,  label: "GAEC du Bocage – Poulailler neuf dinde"            },
-  { id: 5,  label: "Ferme Dupont – Remplacement équipement"            },
-  { id: 6,  label: "Coopérative Arvor – Extension canard"              },
-  { id: 7,  label: "SCEA Bretagne Plumes – Neuf label/bio"             },
-  { id: 8,  label: "Élevages Martin – Rénovation pondeuses 40 000 pl." },
-]
+// ─── Static config ────────────────────────────────────────────────────────────
 
 const STATUT_BADGE: Record<Statut, string> = {
   brouillon: "bg-white/10 border border-white/20 text-white/60",
@@ -72,12 +45,12 @@ function fmtN(n: number, dec = 2) {
   }).format(n)
 }
 
-function ligneTotal(l: Ligne) {
-  return l.qty * l.prixUnitaire * (1 - l.remise / 100)
+function ligneTotal(l: DevisLigne) {
+  return l.qty * l.prix_unitaire * (1 - l.remise / 100)
 }
 
-function ligneRevient(l: Ligne) {
-  return l.qty * l.prixRevient
+function ligneRevient(l: DevisLigne) {
+  return l.qty * l.prix_revient
 }
 
 // ─── Composant cellule éditable ───────────────────────────────────────────────
@@ -112,17 +85,60 @@ export default function DevisEditorPage() {
   const { id }  = useParams<{ id: string }>()
   const router  = useRouter()
 
-  const ref          = `DEV-2026-00${id}`
-  const [statut, setStatut]               = useState<Statut>("envoye")
-  const [affaireId, setAffaireId]         = useState("1")
-  const [dateEnvoi, setDateEnvoi]         = useState("2026-03-06")
-  const [notes, setNotes]                 = useState("Devis suite à R1 et visite de site le 18/02. Client compare avec Bâtivolaille. Insister sur la garantie 10 ans charpente et la télégestion connectée.")
-  const [showStatutMenu, setShowStatutMenu] = useState(false)
+  // ── Remote state ─────────────────────────────────────────────────────────────
+  const [loading, setLoading]           = useState(true)
+  const [error, setError]               = useState<string | null>(null)
+  const [devis, setDevis]               = useState<Devis | null>(null)
+  const [lignes, setLignes]             = useState<DevisLigne[]>([])
+  const [affairesList, setAffairesList] = useState<Pick<Affaire, "id" | "structure">[]>([])
 
-  const [lignes, setLignes] = useState<Ligne[]>(LIGNES_INIT)
+  // ── Form state (mirrors devis fields) ────────────────────────────────────────
+  const [statut, setStatut]               = useState<Statut>("brouillon")
+  const [affaireId, setAffaireId]         = useState<string>("")
+  const [dateEnvoi, setDateEnvoi]         = useState("")
+  const [notes, setNotes]                 = useState("")
+  const [showStatutMenu, setShowStatutMenu] = useState(false)
 
   const [promptPanel, setPromptPanel] = useState<PromptPanel | null>(null)
   const [copied, setCopied]           = useState(false)
+
+  // ── Fetch ─────────────────────────────────────────────────────────────────────
+
+  const fetchAll = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const [devisRes, lignesRes, affairesRes] = await Promise.all([
+        supabase.from("devis").select("*").eq("id", id).single(),
+        supabase.from("devis_lignes").select("*").eq("devis_id", id).order("ordre"),
+        supabase.from("affaires").select("id, structure").order("structure"),
+      ])
+
+      if (devisRes.error || !devisRes.data) {
+        setError("Devis introuvable")
+        return
+      }
+
+      const d = devisRes.data as Devis
+      setDevis(d)
+      setStatut(d.statut)
+      setAffaireId(d.affaire_id ?? "")
+      setDateEnvoi(d.date_envoi ?? "")
+      // notes field is not in Devis type — use concurrent as fallback memo or leave empty
+      setNotes("")
+
+      setLignes((lignesRes.data ?? []) as DevisLigne[])
+      setAffairesList((affairesRes.data ?? []) as Pick<Affaire, "id" | "structure">[])
+    } catch {
+      setError("Erreur lors du chargement du devis")
+    } finally {
+      setLoading(false)
+    }
+  }, [id])
+
+  useEffect(() => {
+    fetchAll()
+  }, [fetchAll])
 
   // ── Calculs temps réel ────────────────────────────────────────────────────────
   const totalHT      = lignes.reduce((s, l) => s + ligneTotal(l), 0)
@@ -140,27 +156,69 @@ export default function DevisEditorPage() {
     margePct < 32 ? "#f59e0b" :
                     "#10b981"
 
-  // ── Handlers lignes ───────────────────────────────────────────────────────────
-  const updateLigne = useCallback((id: number, field: keyof Ligne, raw: string) => {
-    const val = field === "designation" ? raw : (parseFloat(raw) || 0)
-    setLignes((prev) =>
-      prev.map((l) => (l.id === id ? { ...l, [field]: val } : l))
-    )
-  }, [])
+  // ── Save devis header ─────────────────────────────────────────────────────────
 
-  function ajouterLigne() {
-    setLignes((prev) => [
-      ...prev,
-      { id: Date.now(), designation: "", qty: 1, prixUnitaire: 0, remise: 0, prixRevient: 0 },
-    ])
+  async function sauvegarderDevis() {
+    if (!devis) return
+    const { error } = await supabase
+      .from("devis")
+      .update({
+        statut,
+        affaire_id: affaireId || null,
+        date_envoi: dateEnvoi || null,
+      })
+      .eq("id", devis.id)
+    if (!error) {
+      setDevis((prev) => prev ? { ...prev, statut, affaire_id: affaireId || null, date_envoi: dateEnvoi || null } : prev)
+    }
   }
 
-  function supprimerLigne(id: number) {
-    setLignes((prev) => prev.filter((l) => l.id !== id))
+  // ── Handlers lignes ───────────────────────────────────────────────────────────
+
+  async function updateLigne(ligneId: string, field: keyof DevisLigne, raw: string) {
+    const val = field === "designation" ? raw : (parseFloat(raw) || 0)
+    // Update local state immediately for responsive feel
+    setLignes((prev) =>
+      prev.map((l) => (l.id === ligneId ? { ...l, [field]: val } : l))
+    )
+    // Persist to DB
+    await supabase
+      .from("devis_lignes")
+      .update({ [field]: val })
+      .eq("id", ligneId)
+  }
+
+  async function ajouterLigne() {
+    const ordre = lignes.length > 0 ? Math.max(...lignes.map((l) => l.ordre)) + 1 : 1
+    const payload = {
+      devis_id: id,
+      designation: "",
+      qty: 1,
+      prix_unitaire: 0,
+      remise: 0,
+      prix_revient: 0,
+      ordre,
+    }
+    const { data, error } = await supabase
+      .from("devis_lignes")
+      .insert(payload)
+      .select()
+      .single()
+    if (!error && data) {
+      setLignes((prev) => [...prev, data as DevisLigne])
+    }
+  }
+
+  async function supprimerLigne(ligneId: string) {
+    const { error } = await supabase.from("devis_lignes").delete().eq("id", ligneId)
+    if (!error) {
+      setLignes((prev) => prev.filter((l) => l.id !== ligneId))
+    }
   }
 
   // ── Prompts IA ────────────────────────────────────────────────────────────────
-  const affaireLabel = AFFAIRES_LISTE.find((a) => String(a.id) === affaireId)?.label ?? "inconnue"
+  const affaireLabel = affairesList.find((a) => a.id === affaireId)?.structure ?? "inconnue"
+  const ref = devis?.reference ?? `DEV-${id}`
 
   function buildPromptMarge() {
     const detail = lignes
@@ -168,7 +226,7 @@ export default function DevisEditorPage() {
         const tot = ligneTotal(l)
         const rev = ligneRevient(l)
         const m   = tot > 0 ? ((tot - rev) / tot * 100).toFixed(1) : "—"
-        return `  • ${l.designation || "(sans titre)"} : ${l.qty} × ${fmtN(l.prixUnitaire, 0)} €${l.remise > 0 ? ` -${l.remise}%` : ""} = ${fmtN(tot, 0)} € HT (revient ${fmtN(rev, 0)} €, marge ${m}%)`
+        return `  • ${l.designation || "(sans titre)"} : ${l.qty} × ${fmtN(l.prix_unitaire, 0)} €${l.remise > 0 ? ` -${l.remise}%` : ""} = ${fmtN(tot, 0)} € HT (revient ${fmtN(rev, 0)} €, marge ${m}%)`
       })
       .join("\n")
     return `Tu es un expert en pricing équipement avicole.
@@ -220,6 +278,36 @@ Prépare-moi :
     setTimeout(() => setCopied(false), 2000)
   }
 
+  // ── Render guards ─────────────────────────────────────────────────────────────
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen">
+        <Sidebar />
+        <div className="flex-1 md:ml-60 flex flex-col">
+          <TopBar title="Devis" />
+          <div className="flex-1 flex items-center justify-center">
+            <LoadingSpinner />
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (error || !devis) {
+    return (
+      <div className="flex min-h-screen">
+        <Sidebar />
+        <div className="flex-1 md:ml-60 flex flex-col">
+          <TopBar title="Devis" />
+          <div className="flex-1 flex items-center justify-center p-8">
+            <ErrorMessage message={error ?? "Devis introuvable"} onRetry={fetchAll} />
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   // ── Render ────────────────────────────────────────────────────────────────────
   return (
     <div className="flex min-h-screen">
@@ -257,12 +345,12 @@ Prépare-moi :
                 <div className="relative">
                   <select
                     value={affaireId}
-                    onChange={(e) => setAffaireId(e.target.value)}
+                    onChange={(e) => { setAffaireId(e.target.value); setTimeout(sauvegarderDevis, 0) }}
                     className="select-glass w-full pr-8 appearance-none"
                   >
                     <option value="">— Aucune —</option>
-                    {AFFAIRES_LISTE.map((a) => (
-                      <option key={a.id} value={a.id}>{a.label}</option>
+                    {affairesList.map((a) => (
+                      <option key={a.id} value={a.id}>{a.structure}</option>
                     ))}
                   </select>
                   <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: "rgba(255,255,255,0.4)" }} />
@@ -288,7 +376,11 @@ Prépare-moi :
                         {(Object.keys(STATUT_LABELS) as Statut[]).map((s) => (
                           <button
                             key={s}
-                            onClick={() => { setStatut(s); setShowStatutMenu(false) }}
+                            onClick={() => {
+                              setStatut(s)
+                              setShowStatutMenu(false)
+                              supabase.from("devis").update({ statut: s }).eq("id", devis.id)
+                            }}
                             className={`w-full text-left px-3 py-2 text-sm transition-colors hover:bg-white/[0.06] ${statut === s ? "font-semibold" : ""}`}
                           >
                             <span className={`inline-block px-2.5 py-0.5 rounded-full text-[11px] font-medium ${STATUT_BADGE[s]}`}>
@@ -308,7 +400,7 @@ Prépare-moi :
                 <input
                   type="date"
                   value={dateEnvoi}
-                  onChange={(e) => setDateEnvoi(e.target.value)}
+                  onChange={(e) => { setDateEnvoi(e.target.value); setTimeout(sauvegarderDevis, 0) }}
                   className="input-glass w-full"
                 />
               </div>
@@ -367,8 +459,8 @@ Prépare-moi :
                         </td>
                         <td className="px-3 py-2" style={{ color: "#f1f5f9" }}>
                           <Cell
-                            value={l.prixUnitaire}
-                            onChange={(v) => updateLigne(l.id, "prixUnitaire", v)}
+                            value={l.prix_unitaire}
+                            onChange={(v) => updateLigne(l.id, "prix_unitaire", v)}
                             type="number"
                             className="text-right"
                           />
@@ -383,8 +475,8 @@ Prépare-moi :
                         </td>
                         <td className="px-3 py-2 text-white/40">
                           <Cell
-                            value={l.prixRevient}
-                            onChange={(v) => updateLigne(l.id, "prixRevient", v)}
+                            value={l.prix_revient}
+                            onChange={(v) => updateLigne(l.id, "prix_revient", v)}
                             type="number"
                             className="text-right"
                           />

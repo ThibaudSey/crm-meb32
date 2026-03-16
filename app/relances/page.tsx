@@ -1,111 +1,30 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { AlertTriangle, Phone, Mail, X, Copy, Check } from "lucide-react"
 import Sidebar from "@/components/Sidebar"
 import TopBar from "@/components/TopBar"
+import LoadingSpinner from "@/components/LoadingSpinner"
+import ErrorMessage from "@/components/ErrorMessage"
+import { supabase } from "@/lib/supabase"
+import type { Devis } from "@/lib/types"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type Priorite = "Urgent" | "Moyen" | "Attention" | "Faible"
-type TypeRelance = "devis" | "suite_r1" | "prospect"
 
-interface Relance {
-  id: number
+interface RelanceItem {
+  id: string
   structure: string
   contexte: string
-  typeRelance: TypeRelance
-  dernierContact: string   // YYYY-MM-DD
-  aRelancerLe: string      // YYYY-MM-DD
-  priorite: Priorite
-  soncas: string
   joursDepuis: number
-  devisRef?: string
-  concurrent?: string
+  devisRef: string
+  concurrent: string | null
+  priorite: Priorite
+  aRelancerLe: string
 }
 
 interface PromptPanel { titre: string; contenu: string }
-
-// ─── Données ─────────────────────────────────────────────────────────────────
-// Aujourd'hui = 15 mars 2026
-
-const RELANCES: Relance[] = [
-  {
-    id: 1,
-    structure:      "Élevages Martin",
-    contexte:       "Devis DEV-2026-006 envoyé il y a 15 jours sans retour",
-    typeRelance:    "devis",
-    dernierContact: "2026-02-28",
-    aRelancerLe:    "2026-03-07",
-    priorite:       "Urgent",
-    soncas:         "Argent, Sécurité",
-    joursDepuis:    15,
-    devisRef:       "DEV-2026-006",
-    concurrent:     "Volaferm",
-  },
-  {
-    id: 2,
-    structure:      "EARL Morin",
-    contexte:       "Devis DEV-2026-001 envoyé il y a 9 jours sans retour",
-    typeRelance:    "devis",
-    dernierContact: "2026-03-06",
-    aRelancerLe:    "2026-03-13",
-    priorite:       "Moyen",
-    soncas:         "Sécurité, Argent",
-    joursDepuis:    9,
-    devisRef:       "DEV-2026-001",
-    concurrent:     "Bâtivolaille",
-  },
-  {
-    id: 3,
-    structure:      "Gauthier Volailles",
-    contexte:       "Devis DEV-2026-002 envoyé il y a 8 jours sans retour",
-    typeRelance:    "devis",
-    dernierContact: "2026-03-07",
-    aRelancerLe:    "2026-03-14",
-    priorite:       "Moyen",
-    soncas:         "Confort, Nouveauté",
-    joursDepuis:    8,
-    devisRef:       "DEV-2026-002",
-    concurrent:     undefined,
-  },
-  {
-    id: 4,
-    structure:      "GAEC du Bocage",
-    contexte:       "R1 Découverte effectué il y a 10 jours — R2 non encore calé",
-    typeRelance:    "suite_r1",
-    dernierContact: "2026-03-05",
-    aRelancerLe:    "2026-03-15",
-    priorite:       "Attention",
-    soncas:         "Nouveauté, Sécurité",
-    joursDepuis:    10,
-    concurrent:     "Agri-Concept",
-  },
-  {
-    id: 5,
-    structure:      "Ferme Dupont",
-    contexte:       "Prospect contacté il y a 22 jours — aucune suite donnée",
-    typeRelance:    "prospect",
-    dernierContact: "2026-02-21",
-    aRelancerLe:    "2026-03-14",
-    priorite:       "Faible",
-    soncas:         "Argent",
-    joursDepuis:    22,
-    concurrent:     undefined,
-  },
-  {
-    id: 6,
-    structure:      "EARL Renard & Fils",
-    contexte:       "Prospect initial contacté il y a 14 jours — pas de qualification encore",
-    typeRelance:    "prospect",
-    dernierContact: "2026-03-01",
-    aRelancerLe:    "2026-03-22",
-    priorite:       "Faible",
-    soncas:         "non renseigné",
-    joursDepuis:    14,
-    concurrent:     undefined,
-  },
-]
 
 // ─── Config styles ────────────────────────────────────────────────────────────
 
@@ -128,40 +47,73 @@ function isDepasse(d: string) {
   return cible < today
 }
 
+function joursDepuisDate(dateStr: string): number {
+  const date  = new Date(dateStr); date.setHours(0, 0, 0, 0)
+  const today = new Date();        today.setHours(0, 0, 0, 0)
+  return Math.floor((today.getTime() - date.getTime()) / (1000 * 60 * 60 * 24))
+}
+
+function computePriorite(jours: number): Priorite {
+  if (jours >= 14) return "Urgent"
+  if (jours >= 10) return "Moyen"
+  if (jours >= 7)  return "Attention"
+  return "Faible"
+}
+
+function addDays(dateStr: string, days: number): string {
+  const d = new Date(dateStr)
+  d.setDate(d.getDate() + days)
+  return d.toISOString().split("T")[0]
+}
+
+function devisToRelance(d: Devis): RelanceItem {
+  const jours = joursDepuisDate(d.date_envoi!)
+  return {
+    id:          d.id,
+    structure:   d.client,
+    contexte:    `Devis ${d.reference} envoyé il y a ${jours} jours sans retour`,
+    joursDepuis: jours,
+    devisRef:    d.reference,
+    concurrent:  d.concurrent ?? null,
+    priorite:    computePriorite(jours),
+    aRelancerLe: addDays(d.date_envoi!, 7),
+  }
+}
+
 // ─── Constructeurs de prompts ─────────────────────────────────────────────────
 
-function buildScriptPrompt(r: Relance): string {
+function buildScriptPrompt(r: RelanceItem): string {
   return `Tu es un commercial expert en relance téléphonique, spécialisé en équipement avicole.
 
 Client à relancer : ${r.structure}
 Contexte : ${r.contexte}
-Profil SONCAS identifié : ${r.soncas}
-Concurrent identifié : ${r.concurrent ?? "inconnu"}${r.devisRef ? `\nDevis en attente : ${r.devisRef}` : ""}
+Concurrent identifié : ${r.concurrent ?? "inconnu"}
+Devis en attente : ${r.devisRef}
 
 Génère un script de relance téléphonique complet :
 1. Accroche d'ouverture (référencer le dernier contact, créer un pont naturel)
 2. Vérification de la situation actuelle du client (questions ouvertes)
 3. Relance sur la décision — sans pression mais avec urgence créée
-4. Traitement de l'objection la plus probable selon le profil SONCAS (${r.soncas})
+4. Traitement de l'objection la plus probable
 5. Proposition de prochaine étape concrète (RDV, visite, appel de signature)
 6. Closing et confirmation de l'engagement
 
 Ton : chaleureux, professionnel, adapté à la culture agricole. Durée cible : 4-5 minutes.`
 }
 
-function buildEmailPrompt(r: Relance): string {
+function buildEmailPrompt(r: RelanceItem): string {
   return `Tu es un commercial expert en relance email, spécialisé en équipement avicole.
 
 Client : ${r.structure}
 Contexte : ${r.contexte}
-J+${r.joursDepuis} depuis le dernier contact
-Profil SONCAS : ${r.soncas}${r.devisRef ? `\nDevis concerné : ${r.devisRef}` : ""}
+J+${r.joursDepuis} depuis l'envoi du devis
+Devis concerné : ${r.devisRef}
 Concurrent : ${r.concurrent ?? "inconnu"}
 
 Génère un email de relance J+${r.joursDepuis} :
 1. Objet percutant (< 50 caractères, taux d'ouverture prioritaire)
-2. Accroche personnalisée (référence au dernier échange, actualité sectorielle avicole si possible)
-3. Valeur ajoutée rappelée en 2-3 lignes max (adaptée au profil SONCAS ${r.soncas})
+2. Accroche personnalisée (référence au devis, actualité sectorielle avicole si possible)
+3. Valeur ajoutée rappelée en 2-3 lignes max
 4. Appel à l'action unique et clair
 5. Corps : maximum 100 mots
 6. Signature professionnelle
@@ -244,10 +196,39 @@ Génère :
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function RelancesPage() {
+  const [relances, setRelances]       = useState<RelanceItem[]>([])
+  const [loading, setLoading]         = useState(true)
+  const [error, setError]             = useState<string | null>(null)
   const [promptPanel, setPromptPanel] = useState<PromptPanel | null>(null)
   const [copied, setCopied]           = useState(false)
 
-  const enRetard = RELANCES.filter((r) => isDepasse(r.aRelancerLe))
+  const fetchData = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const { data, error: fetchError } = await supabase
+        .from('devis')
+        .select('*')
+        .order('date_envoi', { ascending: true })
+      if (fetchError) throw fetchError
+
+      const devisList: Devis[] = data || []
+      const items = devisList
+        .filter(d => d.statut === 'envoye' && d.date_envoi != null && joursDepuisDate(d.date_envoi) >= 7)
+        .map(devisToRelance)
+      setRelances(items)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Erreur inconnue')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchData()
+  }, [fetchData])
+
+  const enRetard = relances.filter((r) => isDepasse(r.aRelancerLe))
 
   function ouvrirPrompt(titre: string, contenu: string) {
     setPromptPanel({ titre, contenu })
@@ -270,172 +251,191 @@ export default function RelancesPage() {
 
         <main className="flex-1 p-4 md:p-6 pb-20 md:pb-6 space-y-5">
 
-          {/* ── Alerte en retard ── */}
-          {enRetard.length > 0 && (
-            <div className="alert-red">
-              <AlertTriangle size={18} className="mt-0.5 shrink-0" />
-              <div className="text-sm">
-                <span className="font-semibold">
-                  {enRetard.length} relance{enRetard.length > 1 ? "s" : ""} en retard :
-                </span>{" "}
-                {enRetard.map((r, i) => (
-                  <span key={r.id}>
-                    <span className="font-semibold">{r.structure}</span>
-                    {" "}(prévu le {fmtDate(r.aRelancerLe)})
-                    {i < enRetard.length - 1 ? ", " : ""}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
+          {loading && <LoadingSpinner />}
+          {error && <ErrorMessage message={error} />}
 
-          {/* ── Compteur ── */}
-          <div className="flex items-center gap-3 flex-wrap">
-            <p className="text-sm text-white/50">
-              {RELANCES.length} relances à gérer ·{" "}
-              <span className="font-semibold" style={{ color: "#ef4444" }}>{enRetard.length} en retard</span>
-            </p>
-            <div className="flex gap-2 ml-auto flex-wrap">
-              {(["Urgent", "Moyen", "Attention", "Faible"] as Priorite[]).map((p) => {
-                const count = RELANCES.filter((r) => r.priorite === p).length
-                if (!count) return null
-                return (
-                  <span key={p} className={`text-[11px] px-2.5 py-0.5 rounded-full font-medium ${PRIORITE_CONFIG[p].badge}`}>
-                    {PRIORITE_CONFIG[p].label} · {count}
-                  </span>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* ── Vue mobile : Cards relances ── */}
-          <div className="md:hidden space-y-3">
-            {RELANCES.map((r) => {
-              const cfg = PRIORITE_CONFIG[r.priorite]
-              const retard = isDepasse(r.aRelancerLe)
-              return (
-                <div
-                  key={r.id}
-                  className="glass p-4 rounded-2xl"
-                  style={{ borderLeft: `4px solid ${cfg.dotColor}` }}
-                >
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <div>
-                      <p className="font-bold text-sm" style={{ color: "#f1f5f9" }}>{r.structure}</p>
-                      <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.45)" }}>J+{r.joursDepuis} · {r.soncas}</p>
-                    </div>
-                    <span className={`shrink-0 px-2.5 py-0.5 rounded-full text-[11px] font-medium ${cfg.badge}`}>
-                      {cfg.label}
-                    </span>
-                  </div>
-                  <p className="text-xs mb-2 line-clamp-2" style={{ color: "rgba(255,255,255,0.5)" }}>{r.contexte}</p>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-semibold" style={retard ? { color: "#ef4444" } : { color: "rgba(255,255,255,0.6)" }}>
-                      {retard && <AlertTriangle size={10} className="inline mr-0.5 mb-0.5" />}
-                      {fmtDate(r.aRelancerLe)}{retard && " · En retard"}
-                    </span>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => ouvrirPrompt(`Script — ${r.structure}`, buildScriptPrompt(r))}
-                        className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg font-medium bg-indigo-500/20 border border-indigo-500/30 text-indigo-300"
-                      >
-                        <Phone size={12} /> Script
-                      </button>
-                      <button
-                        onClick={() => ouvrirPrompt(`Email J+${r.joursDepuis} — ${r.structure}`, buildEmailPrompt(r))}
-                        className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg font-medium bg-emerald-500/20 border border-emerald-500/30 text-emerald-300"
-                      >
-                        <Mail size={12} /> Email
-                      </button>
-                    </div>
+          {!loading && !error && (
+            <>
+              {/* ── Alerte en retard ── */}
+              {enRetard.length > 0 && (
+                <div className="alert-red">
+                  <AlertTriangle size={18} className="mt-0.5 shrink-0" />
+                  <div className="text-sm">
+                    <span className="font-semibold">
+                      {enRetard.length} relance{enRetard.length > 1 ? "s" : ""} en retard :
+                    </span>{" "}
+                    {enRetard.map((r, i) => (
+                      <span key={r.id}>
+                        <span className="font-semibold">{r.structure}</span>
+                        {" "}(prévu le {fmtDate(r.aRelancerLe)})
+                        {i < enRetard.length - 1 ? ", " : ""}
+                      </span>
+                    ))}
                   </div>
                 </div>
-              )
-            })}
-          </div>
+              )}
 
-          {/* ── Vue desktop : Tableau relances ── */}
-          <div className="hidden md:block glass overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="table-glass w-full text-sm">
-                <thead>
-                  <tr>
-                    <th className="text-left px-5 py-3">Structure</th>
-                    <th className="text-left px-4 py-3 hidden md:table-cell">Contexte</th>
-                    <th className="text-left px-4 py-3 hidden lg:table-cell">Dernier contact</th>
-                    <th className="text-left px-4 py-3">À relancer le</th>
-                    <th className="text-left px-4 py-3">Priorité</th>
-                    <th className="text-right px-4 py-3">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {RELANCES.map((r) => {
-                    const cfg    = PRIORITE_CONFIG[r.priorite]
+              {/* ── Compteur ── */}
+              <div className="flex items-center gap-3 flex-wrap">
+                <p className="text-sm text-white/50">
+                  {relances.length} relances à gérer ·{" "}
+                  <span className="font-semibold" style={{ color: "#ef4444" }}>{enRetard.length} en retard</span>
+                </p>
+                <div className="flex gap-2 ml-auto flex-wrap">
+                  {(["Urgent", "Moyen", "Attention", "Faible"] as Priorite[]).map((p) => {
+                    const count = relances.filter((r) => r.priorite === p).length
+                    if (!count) return null
+                    return (
+                      <span key={p} className={`text-[11px] px-2.5 py-0.5 rounded-full font-medium ${PRIORITE_CONFIG[p].badge}`}>
+                        {PRIORITE_CONFIG[p].label} · {count}
+                      </span>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {relances.length === 0 && (
+                <div className="glass p-10 text-center">
+                  <p className="text-sm" style={{ color: "rgba(255,255,255,0.4)" }}>
+                    Aucun devis en attente de relance (7 jours sans retour).
+                  </p>
+                </div>
+              )}
+
+              {/* ── Vue mobile : Cards relances ── */}
+              {relances.length > 0 && (
+                <div className="md:hidden space-y-3">
+                  {relances.map((r) => {
+                    const cfg = PRIORITE_CONFIG[r.priorite]
                     const retard = isDepasse(r.aRelancerLe)
                     return (
-                      <tr key={r.id} className={`transition-colors hover:opacity-90 ${cfg.row}`}>
-                        <td className="px-5 py-3.5">
-                          <div className="flex items-center gap-2">
-                            <div
-                              className="w-2 h-2 rounded-full shrink-0"
-                              style={{ background: cfg.dotColor }}
-                            />
-                            <div>
-                              <p className="font-semibold text-[#f1f5f9]">{r.structure}</p>
-                              <p className="text-xs text-white/50">J+{r.joursDepuis} · {r.soncas}</p>
-                            </div>
+                      <div
+                        key={r.id}
+                        className="glass p-4 rounded-2xl"
+                        style={{ borderLeft: `4px solid ${cfg.dotColor}` }}
+                      >
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <div>
+                            <p className="font-bold text-sm" style={{ color: "#f1f5f9" }}>{r.structure}</p>
+                            <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.45)" }}>J+{r.joursDepuis} · {r.devisRef}</p>
                           </div>
-                        </td>
-                        <td className="px-4 py-3.5 hidden md:table-cell text-xs text-white/50 max-w-[220px]">
-                          <span className="line-clamp-2">{r.contexte}</span>
-                          {r.concurrent && (
-                            <span className="text-white/35 block mt-0.5">Concurrent : {r.concurrent}</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3.5 hidden lg:table-cell text-xs text-white/50">
-                          {fmtDate(r.dernierContact)}
-                        </td>
-                        <td className="px-4 py-3.5">
-                          <span className={`text-xs font-semibold ${retard ? "" : "text-white/70"}`}
-                            style={retard ? { color: "#ef4444" } : undefined}
-                          >
-                            {retard && <AlertTriangle size={10} className="inline mr-0.5 mb-0.5" />}
-                            {fmtDate(r.aRelancerLe)}
-                            {retard && (
-                              <span className="block text-[10px] font-normal" style={{ color: "#ef4444", opacity: 0.7 }}>
-                                En retard
-                              </span>
-                            )}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3.5">
-                          <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium ${cfg.badge}`}>
+                          <span className={`shrink-0 px-2.5 py-0.5 rounded-full text-[11px] font-medium ${cfg.badge}`}>
                             {cfg.label}
                           </span>
-                        </td>
-                        <td className="px-4 py-3.5">
-                          <div className="flex items-center gap-1.5 justify-end">
+                        </div>
+                        <p className="text-xs mb-2 line-clamp-2" style={{ color: "rgba(255,255,255,0.5)" }}>{r.contexte}</p>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-semibold" style={retard ? { color: "#ef4444" } : { color: "rgba(255,255,255,0.6)" }}>
+                            {retard && <AlertTriangle size={10} className="inline mr-0.5 mb-0.5" />}
+                            {fmtDate(r.aRelancerLe)}{retard && " · En retard"}
+                          </span>
+                          <div className="flex gap-2">
                             <button
-                              onClick={() => ouvrirPrompt(`Script téléphonique — ${r.structure}`, buildScriptPrompt(r))}
-                              className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg font-medium transition-colors whitespace-nowrap bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/30"
+                              onClick={() => ouvrirPrompt(`Script — ${r.structure}`, buildScriptPrompt(r))}
+                              className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg font-medium bg-indigo-500/20 border border-indigo-500/30 text-indigo-300"
                             >
                               <Phone size={12} /> Script
                             </button>
                             <button
-                              onClick={() => ouvrirPrompt(`Email relance J+${r.joursDepuis} — ${r.structure}`, buildEmailPrompt(r))}
-                              className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg font-medium transition-colors whitespace-nowrap bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/30"
+                              onClick={() => ouvrirPrompt(`Email J+${r.joursDepuis} — ${r.structure}`, buildEmailPrompt(r))}
+                              className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg font-medium bg-emerald-500/20 border border-emerald-500/30 text-emerald-300"
                             >
                               <Mail size={12} /> Email
                             </button>
                           </div>
-                        </td>
-                      </tr>
+                        </div>
+                      </div>
                     )
                   })}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                </div>
+              )}
+
+              {/* ── Vue desktop : Tableau relances ── */}
+              {relances.length > 0 && (
+                <div className="hidden md:block glass overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="table-glass w-full text-sm">
+                      <thead>
+                        <tr>
+                          <th className="text-left px-5 py-3">Structure</th>
+                          <th className="text-left px-4 py-3 hidden md:table-cell">Contexte</th>
+                          <th className="text-left px-4 py-3 hidden lg:table-cell">Devis</th>
+                          <th className="text-left px-4 py-3">À relancer le</th>
+                          <th className="text-left px-4 py-3">Priorité</th>
+                          <th className="text-right px-4 py-3">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {relances.map((r) => {
+                          const cfg    = PRIORITE_CONFIG[r.priorite]
+                          const retard = isDepasse(r.aRelancerLe)
+                          return (
+                            <tr key={r.id} className={`transition-colors hover:opacity-90 ${cfg.row}`}>
+                              <td className="px-5 py-3.5">
+                                <div className="flex items-center gap-2">
+                                  <div
+                                    className="w-2 h-2 rounded-full shrink-0"
+                                    style={{ background: cfg.dotColor }}
+                                  />
+                                  <div>
+                                    <p className="font-semibold text-[#f1f5f9]">{r.structure}</p>
+                                    <p className="text-xs text-white/50">J+{r.joursDepuis}</p>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3.5 hidden md:table-cell text-xs text-white/50 max-w-[220px]">
+                                <span className="line-clamp-2">{r.contexte}</span>
+                                {r.concurrent && (
+                                  <span className="text-white/35 block mt-0.5">Concurrent : {r.concurrent}</span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3.5 hidden lg:table-cell text-xs text-white/50">
+                                {r.devisRef}
+                              </td>
+                              <td className="px-4 py-3.5">
+                                <span className={`text-xs font-semibold ${retard ? "" : "text-white/70"}`}
+                                  style={retard ? { color: "#ef4444" } : undefined}
+                                >
+                                  {retard && <AlertTriangle size={10} className="inline mr-0.5 mb-0.5" />}
+                                  {fmtDate(r.aRelancerLe)}
+                                  {retard && (
+                                    <span className="block text-[10px] font-normal" style={{ color: "#ef4444", opacity: 0.7 }}>
+                                      En retard
+                                    </span>
+                                  )}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3.5">
+                                <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium ${cfg.badge}`}>
+                                  {cfg.label}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3.5">
+                                <div className="flex items-center gap-1.5 justify-end">
+                                  <button
+                                    onClick={() => ouvrirPrompt(`Script téléphonique — ${r.structure}`, buildScriptPrompt(r))}
+                                    className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg font-medium transition-colors whitespace-nowrap bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/30"
+                                  >
+                                    <Phone size={12} /> Script
+                                  </button>
+                                  <button
+                                    onClick={() => ouvrirPrompt(`Email relance J+${r.joursDepuis} — ${r.structure}`, buildEmailPrompt(r))}
+                                    className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg font-medium transition-colors whitespace-nowrap bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/30"
+                                  >
+                                    <Mail size={12} /> Email
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
 
           {/* ── Générateur de relances ── */}
           <div className="glass p-5">

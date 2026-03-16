@@ -8,106 +8,73 @@ import {
 import Sidebar from "@/components/Sidebar"
 import TopBar from "@/components/TopBar"
 import { exportToCSV, exportToJSON, importFromJSON, fmtDateExport } from "@/lib/export"
+import { supabase } from "@/lib/supabase"
 
-// ─── Données mock représentatives de toutes les tables ───────────────────────
+// ─── Types internes ───────────────────────────────────────────────────────────
 
-const MOCK_AFFAIRES = [
-  { id: 1, structure: "EARL Morin",          etape: "R2 Proposition", typeProjet: "Neuf",      espece: "Poulet chair",    nbPlaces: 22000, montant: 48000, marge: 34, dateDecision: "2026-04-15" },
-  { id: 2, structure: "Gauthier Volailles",   etape: "Négociation",    typeProjet: "Extension", espece: "Poulet label/bio",nbPlaces: 11000, montant: 32500, marge: 31, dateDecision: "2026-03-28" },
-  { id: 3, structure: "SAS Lefèvre Avicole",  etape: "Signé",          typeProjet: "Rénovation",espece: "Poule pondeuse",  nbPlaces: 30000, montant: 21000, marge: 38, dateDecision: "2026-03-10" },
+type TableRow = Record<string, unknown>
+
+interface TableInfo {
+  key: string
+  label: string
+  icon: string
+  count: number
+  data: TableRow[]
+}
+
+const TABLE_DEFS = [
+  { key: "affaires",     label: "Affaires",     icon: "💼" },
+  { key: "devis",        label: "Devis",         icon: "📄" },
+  { key: "rdvs",         label: "RDV Planning",  icon: "📅" },
+  { key: "todos",        label: "Todos",         icon: "✅" },
+  { key: "frais",        label: "Frais",         icon: "🧾" },
+  { key: "km_entries",   label: "Kilométrique",  icon: "🚗" },
+  { key: "fournisseurs", label: "Fournisseurs",  icon: "🏭" },
 ]
 
-const MOCK_DEVIS = [
-  { id: 1, ref: "DEV-2026-001", client: "EARL Morin",         totalHT: 48000, marge: 34, statut: "envoye",    dateEnvoi: "2026-03-06" },
-  { id: 2, ref: "DEV-2026-002", client: "Gauthier Volailles", totalHT: 32500, marge: 31, statut: "envoye",    dateEnvoi: "2026-03-07" },
-  { id: 3, ref: "DEV-2026-003", client: "SAS Lefèvre",        totalHT: 21000, marge: 38, statut: "accepte",   dateEnvoi: "2026-02-20" },
-  { id: 4, ref: "DEV-2026-004", client: "GAEC du Bocage",     totalHT: 67000, marge: 36, statut: "brouillon", dateEnvoi: null         },
-]
+// ─── Fonctions d'export CSV ───────────────────────────────────────────────────
 
-const MOCK_RDVS = [
-  { id: 1, titre: "Visite terrain EARL Morin",         type: "Visite terrain", date: "2026-03-09", heure: "09:00", affaire: "EARL Morin", lieu: "La Ferrière, 44110" },
-  { id: 2, titre: "R1 Découverte GAEC du Bocage",      type: "R1 Découverte",  date: "2026-03-10", heure: "14:00", affaire: "GAEC du Bocage", lieu: "Bocage Normand" },
-  { id: 3, titre: "R2 Proposition Gauthier Volailles", type: "R2 Proposition", date: "2026-03-11", heure: "10:00", affaire: "Gauthier Volailles", lieu: "Loué, 72540" },
-]
-
-const MOCK_FRAIS = [
-  { id: "f1", date: "2026-03-14", categorie: "Repas/Restaurant", description: "Déjeuner client",     montant_ttc: 45.80, affaire_id: "AF-001" },
-  { id: "f2", date: "2026-03-12", categorie: "Carburant",        description: "Station Total A64",    montant_ttc: 82.50, affaire_id: null     },
-  { id: "f3", date: "2026-03-10", categorie: "Péage",            description: "Autoroute A62",        montant_ttc: 12.40, affaire_id: "AF-003" },
-  { id: "f4", date: "2026-03-08", categorie: "Parking",          description: "Parking Mérignac",     montant_ttc: 8.00,  affaire_id: null     },
-  { id: "f5", date: "2026-03-05", categorie: "Repas/Restaurant", description: "Déjeuner chantier",    montant_ttc: 28.40, affaire_id: "AF-002" },
-]
-
-const MOCK_KM = [
-  { id: "k1", date: "2026-03-14", depart: "Auch (32)", arrivee: "Agen (47)",     km: 90,  vehicule: "Peugeot 308", taux_ik: 0.636, indemnite: 57.24  },
-  { id: "k2", date: "2026-03-10", depart: "Auch (32)", arrivee: "Bordeaux (33)", km: 180, vehicule: "Peugeot 308", taux_ik: 0.636, indemnite: 114.48 },
-  { id: "k3", date: "2026-03-05", depart: "Auch (32)", arrivee: "Toulouse (31)", km: 120, vehicule: "Peugeot 308", taux_ik: 0.636, indemnite: 76.32  },
-]
-
-const MOCK_FOURNISSEURS = [
-  { id: 1, nom: "Big Dutchman France", categorie: "Ventilation", ville: "Lyon", statut: "Actif",  note: 4 },
-  { id: 2, nom: "SKOV France",         categorie: "Régulation",  ville: "Nantes", statut: "Actif",note: 5 },
-  { id: 3, nom: "Val-Co Systems",      categorie: "Abreuvement", ville: "Paris",statut: "En test", note: 3 },
-]
-
-const MOCK_PROSPECTS = [
-  { id: 1, structure: "GAEC des Hauts Bois", contact: "Pierre Legrand", telephone: "06 12 34 56 78", email: "p.legrand@gaec.fr", localisation: "Gers (32)", statut: "Chaud" },
-  { id: 2, structure: "EARL Bontemps",        contact: "Marie Bontemps", telephone: "06 98 76 54 32", email: "earl@bontemps.fr",  localisation: "Lot (46)",  statut: "Tiède" },
-]
-
-const TABLES_INFO = [
-  { key: "affaires",    label: "Affaires",    icon: "💼", data: MOCK_AFFAIRES    },
-  { key: "devis",       label: "Devis",       icon: "📄", data: MOCK_DEVIS       },
-  { key: "rdvs",        label: "RDV Planning",icon: "📅", data: MOCK_RDVS        },
-  { key: "frais",       label: "Frais",       icon: "🧾", data: MOCK_FRAIS       },
-  { key: "kilometrique",label: "Kilométrique",icon: "🚗", data: MOCK_KM          },
-  { key: "fournisseurs",label: "Fournisseurs",icon: "🏭", data: MOCK_FOURNISSEURS },
-  { key: "prospects",   label: "Prospects",   icon: "👤", data: MOCK_PROSPECTS   },
-]
-
-// ─── Exports CSV par module ───────────────────────────────────────────────────
-
-function exportModuleCSV(key: string) {
+function exportModuleCSV(key: string, data: TableRow[]) {
   const now = new Date().toISOString().slice(0, 7)
   if (key === "affaires") {
-    exportToCSV(MOCK_AFFAIRES.map(a => ({ ...a })), `affaires-${now}.csv`, [
-      { key: "structure",    label: "Nom affaire"    },
-      { key: "etape",        label: "Étape"          },
-      { key: "typeProjet",   label: "Type projet"    },
-      { key: "espece",       label: "Espèce"         },
-      { key: "nbPlaces",     label: "Nb places"      },
-      { key: "montant",      label: "Montant €"      },
-      { key: "marge",        label: "Marge %"        },
-      { key: "dateDecision", label: "Date décision"  },
+    exportToCSV(data.map(a => ({ ...a })), `affaires-${now}.csv`, [
+      { key: "structure",     label: "Nom affaire"    },
+      { key: "etape",         label: "Étape"          },
+      { key: "type_projet",   label: "Type projet"    },
+      { key: "espece",        label: "Espèce"         },
+      { key: "nb_places",     label: "Nb places"      },
+      { key: "montant_estime",label: "Montant €"      },
+      { key: "marge",         label: "Marge %"        },
+      { key: "date_decision", label: "Date décision"  },
     ])
   } else if (key === "devis") {
-    exportToCSV(MOCK_DEVIS.map(d => ({ ...d })), `devis-${now}.csv`, [
-      { key: "ref",      label: "Référence"  },
-      { key: "client",   label: "Client"     },
-      { key: "totalHT",  label: "Total HT €" },
-      { key: "marge",    label: "Marge %"    },
-      { key: "statut",   label: "Statut"     },
-      { key: "dateEnvoi",label: "Date envoi" },
+    exportToCSV(data.map(d => ({ ...d })), `devis-${now}.csv`, [
+      { key: "reference",  label: "Référence"  },
+      { key: "client",     label: "Client"     },
+      { key: "total_ht",   label: "Total HT €" },
+      { key: "marge",      label: "Marge %"    },
+      { key: "statut",     label: "Statut"     },
+      { key: "date_envoi", label: "Date envoi" },
     ])
   } else if (key === "rdvs") {
-    exportToCSV(MOCK_RDVS.map(r => ({ ...r, date: fmtDateExport(r.date) })), `rdvs-${now}.csv`, [
-      { key: "date",    label: "Date"         },
-      { key: "heure",   label: "Heure"        },
-      { key: "titre",   label: "Titre"        },
-      { key: "type",    label: "Type RDV"     },
-      { key: "affaire", label: "Affaire liée" },
-      { key: "lieu",    label: "Lieu"         },
+    exportToCSV(data.map(r => ({ ...r, date_rdv: fmtDateExport(r.date_rdv as string) })), `rdvs-${now}.csv`, [
+      { key: "date_rdv", label: "Date"         },
+      { key: "heure",    label: "Heure"        },
+      { key: "titre",    label: "Titre"        },
+      { key: "type_rdv", label: "Type RDV"     },
+      { key: "affaire",  label: "Affaire liée" },
+      { key: "lieu",     label: "Lieu"         },
     ])
   } else if (key === "frais") {
-    exportToCSV(MOCK_FRAIS.map(f => ({ ...f, date: fmtDateExport(f.date) })), `frais-${now}.csv`, [
+    exportToCSV(data.map(f => ({ ...f, date: fmtDateExport(f.date as string) })), `frais-${now}.csv`, [
       { key: "date",        label: "Date"          },
       { key: "categorie",   label: "Catégorie"     },
       { key: "description", label: "Description"   },
       { key: "montant_ttc", label: "Montant TTC €" },
       { key: "affaire_id",  label: "Affaire"       },
     ])
-  } else if (key === "kilometrique") {
-    exportToCSV(MOCK_KM.map(k => ({ ...k, date: fmtDateExport(k.date) })), `km-${now}.csv`, [
+  } else if (key === "km_entries") {
+    exportToCSV(data.map(k => ({ ...k, date: fmtDateExport(k.date as string) })), `km-${now}.csv`, [
       { key: "date",      label: "Date"        },
       { key: "depart",    label: "Départ"      },
       { key: "arrivee",   label: "Arrivée"     },
@@ -117,37 +84,21 @@ function exportModuleCSV(key: string) {
       { key: "indemnite", label: "Indemnité €" },
     ])
   } else if (key === "fournisseurs") {
-    exportToCSV(MOCK_FOURNISSEURS.map(f => ({ ...f })), `fournisseurs-${now}.csv`, [
-      { key: "nom",       label: "Nom"        },
-      { key: "categorie", label: "Catégorie"  },
-      { key: "ville",     label: "Ville"      },
-      { key: "statut",    label: "Statut"     },
-      { key: "note",      label: "Note /5"    },
+    exportToCSV(data.map(f => ({ ...f })), `fournisseurs-${now}.csv`, [
+      { key: "nom",            label: "Nom"        },
+      { key: "categorie",      label: "Catégorie"  },
+      { key: "statut",         label: "Statut"     },
+      { key: "note_fiabilite", label: "Note /5"    },
+      { key: "zone_geo",       label: "Zone géo"   },
     ])
-  } else if (key === "prospects") {
-    exportToCSV(MOCK_PROSPECTS.map(p => ({ ...p })), `prospects-${now}.csv`, [
-      { key: "structure",    label: "Structure"   },
-      { key: "contact",      label: "Contact"     },
-      { key: "telephone",    label: "Téléphone"   },
-      { key: "email",        label: "Email"       },
-      { key: "localisation", label: "Localisation"},
-      { key: "statut",       label: "Statut"      },
+  } else if (key === "todos") {
+    exportToCSV(data.map(t => ({ ...t })), `todos-${now}.csv`, [
+      { key: "texte",       label: "Tâche"       },
+      { key: "categorie",   label: "Catégorie"   },
+      { key: "date_limite", label: "Date limite" },
+      { key: "fait",        label: "Fait"        },
+      { key: "urgent",      label: "Urgent"      },
     ])
-  }
-}
-
-function buildFullBackup() {
-  return {
-    prospects:    MOCK_PROSPECTS,
-    affaires:     MOCK_AFFAIRES,
-    devis:        MOCK_DEVIS,
-    devis_lignes: [],
-    todos:        [],
-    rdvs:         MOCK_RDVS,
-    frais:        MOCK_FRAIS,
-    kilometrique: MOCK_KM,
-    fournisseurs: MOCK_FOURNISSEURS,
-    historique:   [],
   }
 }
 
@@ -156,19 +107,35 @@ function buildFullBackup() {
 export default function SauvegardePage() {
   const fileRef = useRef<HTMLInputElement>(null)
 
-  const [lastBackup, setLastBackup]   = useState<string | null>(null)
-  const [autoBackup, setAutoBackup]   = useState(false)
-  const [lastAutoBackup, setLastAutoBackup] = useState<string | null>(null)
+  const [tables, setTables]         = useState<TableInfo[]>([])
+  const [loadingData, setLoadingData] = useState(true)
 
-  // JSON import state
-  const [importedData, setImportedData]     = useState<Record<string, unknown> | null>(null)
-  const [importError, setImportError]       = useState<string | null>(null)
-  const [importLoading, setImportLoading]   = useState(false)
-  const [showConfirm, setShowConfirm]       = useState<"restore" | "merge" | null>(null)
-  const [restoreDone, setRestoreDone]       = useState(false)
+  const [lastBackup, setLastBackup]           = useState<string | null>(null)
+  const [autoBackup, setAutoBackup]           = useState(false)
+  const [lastAutoBackup, setLastAutoBackup]   = useState<string | null>(null)
 
-  // Exported modules success feedback
-  const [exportedKey, setExportedKey] = useState<string | null>(null)
+  const [importedData, setImportedData]       = useState<Record<string, unknown> | null>(null)
+  const [importError, setImportError]         = useState<string | null>(null)
+  const [importLoading, setImportLoading]     = useState(false)
+  const [showConfirm, setShowConfirm]         = useState<"restore" | "merge" | null>(null)
+  const [restoreDone, setRestoreDone]         = useState(false)
+  const [exportedKey, setExportedKey]         = useState<string | null>(null)
+
+  // ── Charger toutes les tables depuis Supabase ──
+  useEffect(() => {
+    async function loadAll() {
+      const results = await Promise.all(
+        TABLE_DEFS.map(async (t) => {
+          const { data } = await supabase.from(t.key).select("*")
+          const rows = (data ?? []) as TableRow[]
+          return { ...t, count: rows.length, data: rows }
+        })
+      )
+      setTables(results)
+      setLoadingData(false)
+    }
+    loadAll()
+  }, [])
 
   useEffect(() => {
     setLastBackup(localStorage.getItem("meb32_last_backup_date"))
@@ -176,34 +143,41 @@ export default function SauvegardePage() {
     setLastAutoBackup(localStorage.getItem("meb32_auto_backup_date"))
   }, [])
 
+  function buildFullBackup() {
+    const obj: Record<string, TableRow[]> = {}
+    for (const t of tables) obj[t.key] = t.data
+    return obj
+  }
+
   // Auto-backup on page unload
   useEffect(() => {
-    if (!autoBackup) return
+    if (!autoBackup || tables.length === 0) return
     const handler = () => {
       const now = new Date().toISOString()
+      const backup = { ...buildFullBackup(), date_export: now, version: "1.0" }
       localStorage.setItem("meb32_auto_backup_date", now)
-      localStorage.setItem("meb32_auto_backup_data", JSON.stringify({ ...buildFullBackup(), date_export: now, version: "1.0" }))
+      localStorage.setItem("meb32_auto_backup_data", JSON.stringify(backup))
       setLastAutoBackup(now)
     }
     window.addEventListener("beforeunload", handler)
     return () => window.removeEventListener("beforeunload", handler)
-  }, [autoBackup])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoBackup, tables])
 
   function handleFullBackup() {
     exportToJSON(buildFullBackup(), `sauvegarde-MEB32-${new Date().toISOString().slice(0, 10)}.json`)
     setLastBackup(new Date().toISOString())
-    // exportToJSON already saves to localStorage via lib/export.ts
   }
 
   function handleAutoBackupToggle() {
     const next = !autoBackup
     setAutoBackup(next)
     localStorage.setItem("meb32_auto_backup", String(next))
-    if (next) {
-      // Sauvegarde immédiate au premier toggle
+    if (next && tables.length > 0) {
       const now = new Date().toISOString()
+      const backup = { ...buildFullBackup(), date_export: now, version: "1.0" }
       localStorage.setItem("meb32_auto_backup_date", now)
-      localStorage.setItem("meb32_auto_backup_data", JSON.stringify({ ...buildFullBackup(), date_export: now, version: "1.0" }))
+      localStorage.setItem("meb32_auto_backup_data", JSON.stringify(backup))
       setLastAutoBackup(now)
     }
   }
@@ -235,14 +209,12 @@ export default function SauvegardePage() {
   }
 
   function handleRestore() {
-    // Dans une app réelle : écraserait les données en DB / state global
     setShowConfirm(null)
     setRestoreDone(true)
     setTimeout(() => setRestoreDone(false), 3000)
   }
 
   function handleMerge() {
-    // Dans une app réelle : fusionnerait les données
     setShowConfirm(null)
     setRestoreDone(true)
     setTimeout(() => setRestoreDone(false), 3000)
@@ -255,7 +227,7 @@ export default function SauvegardePage() {
     })
   }
 
-  const totalRecords = TABLES_INFO.reduce((s, t) => s + t.data.length, 0)
+  const totalRecords = tables.reduce((s, t) => s + t.count, 0)
 
   return (
     <div className="flex min-h-screen">
@@ -282,30 +254,39 @@ export default function SauvegardePage() {
             </div>
 
             {/* Stats tables */}
-            <div className="grid grid-cols-3 md:grid-cols-7 gap-2">
-              {TABLES_INFO.map(t => (
-                <div key={t.key} className="p-2.5 rounded-xl text-center"
-                  style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
-                  <p className="text-base mb-0.5">{t.icon}</p>
-                  <p className="text-sm font-bold" style={{ color: "#f1f5f9" }}>{t.data.length}</p>
-                  <p className="text-[10px]" style={{ color: "rgba(255,255,255,0.4)" }}>{t.label}</p>
-                </div>
-              ))}
-            </div>
+            {loadingData ? (
+              <div className="flex items-center gap-2 text-sm" style={{ color: "rgba(255,255,255,0.4)" }}>
+                <RefreshCw size={14} className="animate-spin" /> Chargement des données…
+              </div>
+            ) : (
+              <div className="grid grid-cols-3 md:grid-cols-7 gap-2">
+                {tables.map(t => (
+                  <div key={t.key} className="p-2.5 rounded-xl text-center"
+                    style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                    <p className="text-base mb-0.5">{t.icon}</p>
+                    <p className="text-sm font-bold" style={{ color: "#f1f5f9" }}>{t.count}</p>
+                    <p className="text-[10px]" style={{ color: "rgba(255,255,255,0.4)" }}>{t.label}</p>
+                  </div>
+                ))}
+              </div>
+            )}
 
             <div className="flex items-center gap-4 flex-wrap">
               <div className="flex items-center gap-2 text-sm" style={{ color: "rgba(255,255,255,0.5)" }}>
                 <Clock size={14} />
                 <span>Dernière sauvegarde : <span style={{ color: "#f1f5f9" }}>{fmtDate(lastBackup)}</span></span>
               </div>
-              <div className="text-sm" style={{ color: "rgba(255,255,255,0.5)" }}>
-                Total : <span className="font-semibold" style={{ color: "#a5b4fc" }}>{totalRecords} enregistrements</span>
-              </div>
+              {!loadingData && (
+                <div className="text-sm" style={{ color: "rgba(255,255,255,0.5)" }}>
+                  Total : <span className="font-semibold" style={{ color: "#a5b4fc" }}>{totalRecords} enregistrements</span>
+                </div>
+              )}
             </div>
 
             <button
               onClick={handleFullBackup}
-              className="btn-primary rounded-xl px-5 py-3 text-sm font-semibold flex items-center gap-2.5"
+              disabled={loadingData}
+              className="btn-primary rounded-xl px-5 py-3 text-sm font-semibold flex items-center gap-2.5 disabled:opacity-50"
               style={{ background: "linear-gradient(135deg, #6366f1, #8b5cf6)" }}
             >
               <Download size={16} /> 💾 Télécharger la sauvegarde complète (JSON)
@@ -376,9 +357,9 @@ export default function SauvegardePage() {
                 <p className="text-sm font-semibold" style={{ color: "#f1f5f9" }}>Aperçu du fichier</p>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
                   {[
-                    { label: "Date export",  value: importedData.date_export ? fmtDate(importedData.date_export as string) : "—" },
-                    { label: "Version",      value: String(importedData.version ?? "—") },
-                    ...TABLES_INFO.map(t => ({
+                    { label: "Date export", value: importedData.date_export ? fmtDate(importedData.date_export as string) : "—" },
+                    { label: "Version",     value: String(importedData.version ?? "—") },
+                    ...TABLE_DEFS.map(t => ({
                       label: t.label,
                       value: `${Array.isArray(importedData[t.key]) ? (importedData[t.key] as unknown[]).length : 0} entrées`,
                     })),
@@ -449,11 +430,11 @@ export default function SauvegardePage() {
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {TABLES_INFO.map(t => (
+              {tables.map(t => (
                 <button
                   key={t.key}
                   onClick={() => {
-                    exportModuleCSV(t.key)
+                    exportModuleCSV(t.key, t.data)
                     setExportedKey(t.key)
                     setTimeout(() => setExportedKey(null), 2000)
                   }}
@@ -472,7 +453,7 @@ export default function SauvegardePage() {
                   }
                   <span className="text-xs text-center">{t.label} CSV</span>
                   <span className="text-[10px]" style={{ color: "rgba(255,255,255,0.3)" }}>
-                    {t.data.length} entrée{t.data.length !== 1 ? "s" : ""}
+                    {t.count} entrée{t.count !== 1 ? "s" : ""}
                   </span>
                 </button>
               ))}
