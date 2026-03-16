@@ -281,7 +281,27 @@ export default function FraisPage() {
         <main className="flex-1 p-5 md:p-6 pb-20 md:pb-8 space-y-5">
 
           {/* ── Zone haute : saisie rapide ── */}
-          <div className="flex flex-wrap gap-3">
+          {/* Mobile : 2 gros boutons côte à côte */}
+          <div className="grid grid-cols-2 gap-3 md:hidden">
+            <button
+              onClick={() => { setEditFrais(null); setShowAddFrais(true) }}
+              className="rounded-xl flex flex-col items-center justify-center gap-1.5 text-sm font-semibold transition-all"
+              style={{ height: "64px", background: "linear-gradient(135deg, #6366f1, #8b5cf6)", color: "white", boxShadow: "0 4px 15px rgba(99,102,241,0.35)" }}
+            >
+              <Receipt size={20} />
+              <span className="text-xs">📸 Ajouter un frais</span>
+            </button>
+            <button
+              onClick={() => setShowAddKm(true)}
+              className="rounded-xl flex flex-col items-center justify-center gap-1.5 text-sm font-semibold transition-all"
+              style={{ height: "64px", background: "linear-gradient(135deg, #10b981, #059669)", color: "white", boxShadow: "0 4px 15px rgba(16,185,129,0.3)" }}
+            >
+              <Car size={20} />
+              <span className="text-xs">🚗 Ajouter des KM</span>
+            </button>
+          </div>
+          {/* Desktop : boutons en ligne */}
+          <div className="hidden md:flex flex-wrap gap-3">
             <button
               onClick={() => { setEditFrais(null); setShowAddFrais(true) }}
               className="rounded-xl flex items-center gap-2.5 px-5 py-3 text-sm font-semibold flex-1 min-w-[200px] justify-center transition-all"

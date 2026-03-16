@@ -143,7 +143,44 @@ export default function AffairesPage() {
         <main className="flex-1 p-5 md:p-6 pb-20 md:pb-6 space-y-4">
 
           {/* Barre d'outils */}
-          <div className="flex flex-wrap items-center gap-3">
+          {/* Mobile : recherche + bouton créer */}
+          <div className="flex items-center gap-2 md:hidden">
+            <div
+              className="flex items-center gap-2 rounded-xl px-3 py-2.5 flex-1"
+              style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)" }}
+            >
+              <Search size={15} className="shrink-0" style={{ color: "rgba(255,255,255,0.35)" }} />
+              <input
+                type="text"
+                placeholder="Rechercher…"
+                value={recherche}
+                onChange={(e) => setRecherche(e.target.value)}
+                className="bg-transparent text-sm text-[#f1f5f9] outline-none w-full"
+                style={{ caretColor: "#a5b4fc" }}
+              />
+            </div>
+            <button className="btn-primary rounded-xl flex items-center gap-1.5 text-sm font-semibold px-3 py-2.5 shrink-0">
+              <Plus size={16} />
+            </button>
+          </div>
+          {/* Mobile : pills filtre étape */}
+          <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 md:hidden" style={{ scrollbarWidth: "none" }}>
+            {ETAPES_OPTIONS.map((e) => (
+              <button
+                key={e}
+                onClick={() => setFiltreEtape(e)}
+                className="shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-all"
+                style={filtreEtape === e
+                  ? { background: "linear-gradient(135deg,#6366f1,#8b5cf6)", color: "#fff" }
+                  : { background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.6)" }
+                }
+              >
+                {e}
+              </button>
+            ))}
+          </div>
+          {/* Desktop : barre complète */}
+          <div className="hidden md:flex flex-wrap items-center gap-3">
 
             {/* Sélecteur navigation rapide */}
             <select
@@ -201,8 +238,50 @@ export default function AffairesPage() {
             </span>
           </p>
 
-          {/* Tableau */}
-          <div className="glass overflow-hidden">
+          {/* ── Vue mobile : Cards ── */}
+          <div className="md:hidden space-y-3">
+            {affairesFiltrees.length === 0 && (
+              <div className="glass rounded-2xl py-12 text-center text-sm" style={{ color: "rgba(255,255,255,0.3)" }}>
+                Aucune affaire ne correspond à ces filtres.
+              </div>
+            )}
+            {affairesFiltrees.map((a) => (
+              <div
+                key={a.id}
+                onClick={() => router.push(`/affaires/${a.id}`)}
+                className="glass p-4 cursor-pointer active:opacity-80 transition-opacity"
+              >
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div>
+                    <p className="font-bold text-sm" style={{ color: "#f1f5f9" }}>{a.structure}</p>
+                    <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.4)" }}>{a.typeInter}</p>
+                  </div>
+                  <span className="text-base font-bold whitespace-nowrap" style={{ color: "#10b981" }}>
+                    {fmt(a.montant)}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium ${ETAPE_STYLE[a.etape]}`}>
+                    {a.etape}
+                  </span>
+                  <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium ${TYPE_PROJET_STYLE[a.typeProjet]}`}>
+                    {a.typeProjet}
+                  </span>
+                  <span className="text-xs ml-auto font-semibold" style={{
+                    color: a.marge >= 35 ? "#10b981" : a.marge >= 30 ? "#f59e0b" : "#ef4444"
+                  }}>
+                    {a.marge}%
+                  </span>
+                </div>
+                <p className="text-xs mt-2 pt-2" style={{ color: "rgba(255,255,255,0.4)", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+                  → {a.prochaineAction}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          {/* ── Vue desktop : Tableau ── */}
+          <div className="hidden md:block glass overflow-hidden">
             <div className="overflow-x-auto">
               <table className="table-glass w-full text-sm">
                 <thead>

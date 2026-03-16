@@ -467,6 +467,7 @@ function ModalNouvelleAffaire({
 export default function PipelinePage() {
   const [affaires, setAffaires] = useState<Affaire[]>(AFFAIRES_INIT)
   const [modalOuvert, setModalOuvert] = useState(false)
+  const [filtreEtapeMobile, setFiltreEtapeMobile] = useState<Etape | "Toutes">("Toutes")
 
   function avancerAffaire(id: number) {
     setAffaires((prev) =>
@@ -491,6 +492,10 @@ export default function PipelinePage() {
     }
   }
 
+  const affairesMobileFiltrees = filtreEtapeMobile === "Toutes"
+    ? affaires
+    : affaires.filter((a) => a.etape === filtreEtapeMobile)
+
   return (
     <div className="flex min-h-screen">
       <Sidebar />
@@ -498,10 +503,10 @@ export default function PipelinePage() {
       <div className="flex-1 md:ml-60 flex flex-col min-h-screen">
         <TopBar title="Pipeline" />
 
-        <main className="flex-1 p-5 md:p-6 pb-20 md:pb-6">
+        <main className="flex-1 p-4 md:p-6 pb-24 md:pb-6">
 
-          {/* Header actions */}
-          <div className="flex items-center justify-between mb-5">
+          {/* Header actions – desktop uniquement */}
+          <div className="hidden md:flex items-center justify-between mb-5">
             <div>
               <p className="text-sm text-white/70">
                 {affaires.length} affaires ·{" "}
@@ -519,8 +524,50 @@ export default function PipelinePage() {
             </button>
           </div>
 
-          {/* Kanban board */}
-          <div className="flex gap-4 overflow-x-auto pb-4">
+          {/* ── Vue mobile : pills + liste ── */}
+          <div className="md:hidden">
+            {/* Résumé */}
+            <p className="text-xs text-white/50 mb-3">
+              {affaires.length} affaires · <span className="text-white/70 font-medium">{fmt(affaires.reduce((s, a) => s + a.montant, 0))}</span>
+            </p>
+
+            {/* Pills filtre scrollables */}
+            <div className="flex gap-2 overflow-x-auto pb-2 mb-4 -mx-4 px-4" style={{ scrollbarWidth: "none" }}>
+              {(["Toutes", ...ETAPES.map(e => e.label)] as (Etape | "Toutes")[]).map((etape) => {
+                const active = filtreEtapeMobile === etape
+                const count = etape === "Toutes" ? affaires.length : affaires.filter(a => a.etape === etape).length
+                return (
+                  <button
+                    key={etape}
+                    onClick={() => setFiltreEtapeMobile(etape)}
+                    className="shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-full text-sm font-medium transition-all"
+                    style={active
+                      ? { background: "linear-gradient(135deg,#6366f1,#8b5cf6)", color: "#fff", boxShadow: "0 4px 12px rgba(99,102,241,0.4)" }
+                      : { background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.6)" }
+                    }
+                  >
+                    {etape}
+                    <span className="text-[11px] font-bold opacity-70">({count})</span>
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* Liste des affaires filtrées */}
+            <div className="space-y-3">
+              {affairesMobileFiltrees.length === 0 && (
+                <div className="glass rounded-2xl py-12 flex items-center justify-center text-sm text-white/30">
+                  Aucune affaire
+                </div>
+              )}
+              {affairesMobileFiltrees.map((a) => (
+                <AffaireCard key={a.id} affaire={a} onAvancer={avancerAffaire} />
+              ))}
+            </div>
+          </div>
+
+          {/* ── Vue desktop : Kanban board ── */}
+          <div className="hidden md:flex gap-4 overflow-x-auto pb-4">
             {ETAPES.map(({ label, dot }) => {
               const { items, total } = colStats(label)
               return (
@@ -557,6 +604,15 @@ export default function PipelinePage() {
           </div>
         </main>
       </div>
+
+      {/* FAB mobile */}
+      <button
+        onClick={() => setModalOuvert(true)}
+        className="fab md:hidden"
+        aria-label="Nouvelle affaire"
+      >
+        <Plus size={24} />
+      </button>
 
       {/* Modal */}
       {modalOuvert && (

@@ -160,12 +160,54 @@ export default function DevisPage() {
             </p>
             <button className="btn-primary rounded-xl flex items-center gap-2 text-sm font-semibold px-4 py-2.5">
               <Plus size={16} />
-              Nouveau devis
+              <span className="hidden sm:inline">Nouveau devis</span>
+              <span className="sm:hidden">Nouveau</span>
             </button>
           </div>
 
-          {/* ── Tableau ── */}
-          <div className="glass overflow-hidden">
+          {/* ── Vue mobile : Cards ── */}
+          <div className="md:hidden space-y-3">
+            {devisAvecJours.map((d) => {
+              const relance = d.statut === "envoye" && (d.jours ?? 0) > 7
+              return (
+                <div
+                  key={d.id}
+                  onClick={() => router.push(`/devis/${d.id}`)}
+                  className="glass p-4 cursor-pointer active:opacity-80 transition-opacity"
+                  style={relance ? { border: "1px solid rgba(249,115,22,0.4)" } : undefined}
+                >
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div>
+                      <p className="font-bold text-sm" style={{ color: "#f1f5f9" }}>{d.client}</p>
+                      <p className="text-xs font-mono mt-0.5" style={{ color: "rgba(255,255,255,0.4)" }}>{d.ref}</p>
+                    </div>
+                    <span className="text-base font-bold whitespace-nowrap" style={{ color: "#10b981" }}>
+                      {fmt(d.totalHT)}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium ${STATUT_STYLE[d.statut].badge}`}>
+                      {STATUT_STYLE[d.statut].label}
+                    </span>
+                    <span className="text-xs" style={{ color: "rgba(255,255,255,0.45)" }}>{d.typeProjet}</span>
+                    <span className="text-xs font-semibold ml-auto" style={{
+                      color: d.marge >= 32 ? "#10b981" : d.marge >= 25 ? "#f59e0b" : "#ef4444"
+                    }}>
+                      Marge {d.marge}%
+                    </span>
+                  </div>
+                  {relance && (
+                    <div className="flex items-center gap-1 mt-2 text-xs font-medium" style={{ color: "#fb923c" }}>
+                      <AlertTriangle size={12} /> Relancer — J+{d.jours} sans retour
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+
+          {/* ── Vue desktop : Tableau ── */}
+          <div className="hidden md:block glass overflow-hidden">
             <div className="overflow-x-auto">
               <table className="table-glass w-full text-sm">
                 <thead>

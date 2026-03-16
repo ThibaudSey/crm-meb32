@@ -219,6 +219,8 @@ export default function PlanningPage() {
   const [form, setForm]               = useState(FORM_VIDE)
   const [promptPanel, setPromptPanel] = useState<PromptPanel | null>(null)
   const [copied, setCopied]           = useState(false)
+  // Mobile : offset en jours depuis aujourd'hui
+  const [dayOffset, setDayOffset] = useState(0)
 
   // ── Semaine ───────────────────────────────────────────────────────────────
   const monday = useMemo(() => getWeekMonday(weekOffset), [weekOffset])
@@ -281,6 +283,21 @@ Aide-moi à préparer ce rendez-vous :
     setTimeout(() => setCopied(false), 2000)
   }
 
+  // ── Jour mobile ──────────────────────────────────────────────────────────
+  const mobileDay = useMemo(() => {
+    const d = new Date()
+    d.setDate(d.getDate() + dayOffset)
+    d.setHours(0, 0, 0, 0)
+    return d
+  }, [dayOffset])
+
+  const mobileDayLabel = useMemo(() => {
+    const opts: Intl.DateTimeFormatOptions = { weekday: "long", day: "numeric", month: "long" }
+    return mobileDay.toLocaleDateString("fr-FR", opts)
+  }, [mobileDay])
+
+  const mobileDayRdvs = useMemo(() => rdvsForDay(mobileDay), [mobileDay, rdvs]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="flex min-h-screen">
@@ -299,8 +316,96 @@ Aide-moi à préparer ce rendez-vous :
           </button>
         } />
 
-        <main className="flex-1 p-5 md:p-6 pb-20 md:pb-6">
+        <main className="flex-1 p-4 md:p-6 pb-24 md:pb-6">
 
+          {/* ── Vue mobile : Jour ── */}
+          <div className="md:hidden">
+            {/* Nav jour */}
+            <div className="flex items-center justify-between mb-4">
+              <button
+                onClick={() => setDayOffset(o => o - 1)}
+                className="w-10 h-10 flex items-center justify-center rounded-xl"
+                style={{ background: "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.7)" }}
+              >
+                <ChevronLeft size={20} />
+              </button>
+
+              <div className="text-center flex-1 mx-3">
+                <p className="text-sm font-semibold capitalize" style={{ color: "#f1f5f9" }}>
+                  {mobileDayLabel}
+                </p>
+                {isToday(mobileDay) && (
+                  <span className="text-[11px] font-medium px-2 py-0.5 rounded-full"
+                    style={{ background: "rgba(99,102,241,0.2)", color: "#a5b4fc" }}>
+                    Aujourd&apos;hui
+                  </span>
+                )}
+              </div>
+
+              <button
+                onClick={() => setDayOffset(o => o + 1)}
+                className="w-10 h-10 flex items-center justify-center rounded-xl"
+                style={{ background: "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.7)" }}
+              >
+                <ChevronRight size={20} />
+              </button>
+            </div>
+
+            {dayOffset !== 0 && (
+              <button
+                onClick={() => setDayOffset(0)}
+                className="w-full mb-3 py-2 rounded-xl text-xs font-medium"
+                style={{ background: "rgba(99,102,241,0.15)", color: "#a5b4fc", border: "1px solid rgba(99,102,241,0.3)" }}
+              >
+                Revenir à aujourd&apos;hui
+              </button>
+            )}
+
+            {/* RDVs du jour */}
+            {mobileDayRdvs.length === 0 ? (
+              <div
+                onClick={() => { setForm(f => ({ ...f, date: dateStr(mobileDay) })); setShowNewForm(true) }}
+                className="rounded-2xl py-12 flex flex-col items-center justify-center gap-2 cursor-pointer"
+                style={{ border: "2px dashed rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.3)" }}
+              >
+                <Plus size={24} />
+                <span className="text-sm">Aucun RDV — Ajouter</span>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {mobileDayRdvs.map((rdv) => {
+                  const cfg = TYPE_CONFIG[rdv.type]
+                  return (
+                    <button
+                      key={rdv.id}
+                      onClick={() => setSelectedRdv(rdv)}
+                      className="w-full text-left glass rounded-2xl px-4 py-4 hover:opacity-80 transition-opacity"
+                      style={{ borderLeft: `4px solid ${cfg.borderColor}` }}
+                    >
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium ${cfg.badge}`}>
+                          {rdv.type}
+                        </span>
+                        <span className="text-xs font-semibold ml-auto" style={{ color: "rgba(255,255,255,0.6)" }}>
+                          {rdv.heure} · {rdv.duree}
+                        </span>
+                      </div>
+                      <p className="font-semibold text-sm" style={{ color: "#f1f5f9" }}>{rdv.titre}</p>
+                      {rdv.lieu && (
+                        <div className="flex items-center gap-1 mt-1">
+                          <MapPin size={11} style={{ color: "rgba(255,255,255,0.35)" }} />
+                          <p className="text-xs" style={{ color: "rgba(255,255,255,0.45)" }}>{rdv.lieu}</p>
+                        </div>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* ── Vue desktop : Nav semaine + grille ── */}
+          <div className="hidden md:block">
           {/* ── Nav semaine ── */}
           <div className="flex items-center gap-3 mb-5 flex-wrap">
             <button onClick={() => setWeekOffset((o) => o - 1)}
@@ -463,8 +568,18 @@ Aide-moi à préparer ce rendez-vous :
               </div>
             </div>
           </div>
+          </div>{/* fin div desktop */}
         </main>
       </div>
+
+      {/* FAB mobile */}
+      <button
+        onClick={() => setShowNewForm(true)}
+        className="fab md:hidden"
+        aria-label="Nouveau RDV"
+      >
+        <Plus size={24} />
+      </button>
 
       {/* ══ MODAL DÉTAIL RDV ══ */}
       {selectedRdv && (() => {

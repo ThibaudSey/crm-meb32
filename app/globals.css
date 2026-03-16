@@ -253,6 +253,88 @@ html, body {
   font-family: inherit;
 }
 
+/* ── Modal overlay : centré desktop, bottom-sheet mobile ── */
+.modal-overlay {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+.modal-box {
+  width: 100%;
+  position: relative;
+}
+
+/* ── Bottom nav mobile safe area ── */
+.bottom-nav-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* ── Floating action button ── */
+.fab {
+  position: fixed;
+  bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+  right: 1.25rem;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  box-shadow: 0 8px 24px rgba(99,102,241,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  border: none;
+  cursor: pointer;
+  z-index: 25;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.fab:active { transform: scale(0.95); }
+
+/* ── Mobile-only: bottom sheet modals ── */
+@media (max-width: 767px) {
+  .modal-overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+  .modal-box {
+    border-radius: 20px 20px 0 0 !important;
+    max-width: 100% !important;
+    width: 100%;
+    max-height: 92vh;
+    overflow-y: auto;
+    padding-bottom: env(safe-area-inset-bottom, 1rem);
+  }
+  .modal-box::before {
+    content: '';
+    display: block;
+    width: 40px;
+    height: 4px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 99px;
+    margin: 12px auto 0;
+  }
+
+  /* Empêche le zoom iOS sur les inputs */
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+
+  /* Touch targets minimum 44px */
+  button, a[role="button"] {
+    min-height: 44px;
+  }
+
+  /* Faster tap response */
+  button, a {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+/* ── Smooth scrolling ── */
+html { scroll-behavior: smooth; }
+
 /* ── Scrollbar ── */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }

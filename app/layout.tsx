@@ -6,6 +6,14 @@ export const metadata: Metadata = {
   description: "CRM commercial MEB32 pour équipement d'élevage volaille",
 }
 
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: "cover",
+}
+
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="fr">

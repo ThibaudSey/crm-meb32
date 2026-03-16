@@ -308,8 +308,54 @@ export default function RelancesPage() {
             </div>
           </div>
 
-          {/* ── Tableau relances ── */}
-          <div className="glass overflow-hidden">
+          {/* ── Vue mobile : Cards relances ── */}
+          <div className="md:hidden space-y-3">
+            {RELANCES.map((r) => {
+              const cfg = PRIORITE_CONFIG[r.priorite]
+              const retard = isDepasse(r.aRelancerLe)
+              return (
+                <div
+                  key={r.id}
+                  className="glass p-4 rounded-2xl"
+                  style={{ borderLeft: `4px solid ${cfg.dotColor}` }}
+                >
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div>
+                      <p className="font-bold text-sm" style={{ color: "#f1f5f9" }}>{r.structure}</p>
+                      <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.45)" }}>J+{r.joursDepuis} · {r.soncas}</p>
+                    </div>
+                    <span className={`shrink-0 px-2.5 py-0.5 rounded-full text-[11px] font-medium ${cfg.badge}`}>
+                      {cfg.label}
+                    </span>
+                  </div>
+                  <p className="text-xs mb-2 line-clamp-2" style={{ color: "rgba(255,255,255,0.5)" }}>{r.contexte}</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-semibold" style={retard ? { color: "#ef4444" } : { color: "rgba(255,255,255,0.6)" }}>
+                      {retard && <AlertTriangle size={10} className="inline mr-0.5 mb-0.5" />}
+                      {fmtDate(r.aRelancerLe)}{retard && " · En retard"}
+                    </span>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => ouvrirPrompt(`Script — ${r.structure}`, buildScriptPrompt(r))}
+                        className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg font-medium bg-indigo-500/20 border border-indigo-500/30 text-indigo-300"
+                      >
+                        <Phone size={12} /> Script
+                      </button>
+                      <button
+                        onClick={() => ouvrirPrompt(`Email J+${r.joursDepuis} — ${r.structure}`, buildEmailPrompt(r))}
+                        className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg font-medium bg-emerald-500/20 border border-emerald-500/30 text-emerald-300"
+                      >
+                        <Mail size={12} /> Email
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* ── Vue desktop : Tableau relances ── */}
+          <div className="hidden md:block glass overflow-hidden">
             <div className="overflow-x-auto">
               <table className="table-glass w-full text-sm">
                 <thead>

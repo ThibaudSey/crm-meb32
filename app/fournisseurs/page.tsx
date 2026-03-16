@@ -116,12 +116,12 @@ export default function FournisseursPage() {
           </div>
 
           {/* ── Filtres catégorie ── */}
-          <div className="flex flex-wrap gap-2">
+          <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 md:mx-0 md:px-0 md:flex-wrap" style={{ scrollbarWidth: "none" }}>
             {ALL_CATS.map(c => (
               <button
                 key={c}
                 onClick={() => setFiltre(c)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${
+                className={`shrink-0 px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${
                   filtre === c
                     ? c === "Tous"
                       ? "bg-indigo-500/30 border-indigo-500/50 text-indigo-200"
