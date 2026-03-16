@@ -44,7 +44,7 @@ export default function TopBar({ title }: { title: string }) {
         <Bell size={18} />
         <span
           className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full ring-2"
-          style={{ background: "#ef4444", ringColor: "transparent" }}
+          style={{ background: "#ef4444" }}
         />
       </button>
 
