@@ -4,7 +4,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
   LayoutDashboard, GitMerge, Briefcase, FileText,
-  CalendarDays, Users, Bell, LogOut, ClipboardList, Factory, Receipt,
+  CalendarDays, Users, Bell, LogOut, ClipboardList, Factory, Receipt, DatabaseBackup,
 } from "lucide-react"
 
 const navItems = [
@@ -17,6 +17,7 @@ const navItems = [
   { label: "Prospects",      href: "/prospects",    icon: Users },
   { label: "Fournisseurs",   href: "/fournisseurs", icon: Factory },
   { label: "Frais",          href: "/frais",        icon: Receipt },
+  { label: "Sauvegarde",     href: "/sauvegarde",   icon: DatabaseBackup },
   { label: "Relances",       href: "/relances",     icon: Bell },
 ]
 

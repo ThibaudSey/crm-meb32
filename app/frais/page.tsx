@@ -8,6 +8,7 @@ import {
 } from "lucide-react"
 import Sidebar from "@/components/Sidebar"
 import TopBar from "@/components/TopBar"
+import { exportToCSV, fmtDateExport } from "@/lib/export"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -112,6 +113,62 @@ function catConfig(cat: string) {
   return CATEGORIES.find(c => c.value === cat) ?? { value: cat, label: cat, icon: "❓" }
 }
 
+function exportFraisCSV(frais: FraisEntry[]) {
+  exportToCSV(
+    frais.map(f => ({
+      date:      fmtDateExport(f.date),
+      categorie: f.categorie,
+      desc:      f.description,
+      affaire:   f.affaire_id ?? "",
+      ttc:       f.montant_ttc,
+      mois:      f.date.split("-")[1],
+      annee:     f.date.split("-")[0],
+    })),
+    `frais-MEB32-${new Date().toISOString().slice(0, 7)}.csv`,
+    [
+      { key: "date",      label: "Date"           },
+      { key: "categorie", label: "Catégorie"      },
+      { key: "desc",      label: "Description"    },
+      { key: "affaire",   label: "Affaire liée"   },
+      { key: "ttc",       label: "Montant TTC €"  },
+      { key: "mois",      label: "Mois"           },
+      { key: "annee",     label: "Année"          },
+    ]
+  )
+}
+
+function exportKmCSV(km: KmEntry[]) {
+  exportToCSV(
+    km.map(k => ({
+      date:         fmtDateExport(k.date),
+      depart:       k.depart,
+      arrivee:      k.arrivee,
+      km:           k.km,
+      allerRetour:  k.aller_retour ? "oui" : "non",
+      motif:        k.motif,
+      vehicule:     k.vehicule,
+      taux:         k.taux_ik,
+      indemnite:    k.indemnite,
+      mois:         k.date.split("-")[1],
+      annee:        k.date.split("-")[0],
+    })),
+    `kilometrique-MEB32-${new Date().toISOString().slice(0, 7)}.csv`,
+    [
+      { key: "date",        label: "Date"           },
+      { key: "depart",      label: "Départ"         },
+      { key: "arrivee",     label: "Arrivée"        },
+      { key: "km",          label: "KM"             },
+      { key: "allerRetour", label: "Aller-retour"   },
+      { key: "motif",       label: "Motif"          },
+      { key: "vehicule",    label: "Véhicule"       },
+      { key: "taux",        label: "Taux IK €/km"   },
+      { key: "indemnite",   label: "Indemnité €"    },
+      { key: "mois",        label: "Mois"           },
+      { key: "annee",       label: "Année"          },
+    ]
+  )
+}
+
 function exportCSV(frais: FraisEntry[], km: KmEntry[], month: number, year: number) {
   let csv = "Type,Date,Description,Affaire,Montant TTC,Catégorie / Véhicule,Détail\n"
   frais.forEach(f => {
@@ -198,7 +255,28 @@ export default function FraisPage() {
       <Sidebar />
 
       <div className="flex-1 md:ml-60 flex flex-col min-h-screen">
-        <TopBar title="Frais & Kilométrique" />
+        <TopBar title="Frais & Kilométrique" actions={
+          <div className="flex gap-1.5">
+            <button
+              onClick={() => exportFraisCSV(fraisList)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all"
+              style={{ background: "rgba(99,102,241,0.15)", border: "1px solid rgba(99,102,241,0.3)", color: "#a5b4fc" }}
+              onMouseEnter={e => (e.currentTarget.style.background = "rgba(99,102,241,0.25)")}
+              onMouseLeave={e => (e.currentTarget.style.background = "rgba(99,102,241,0.15)")}
+            >
+              <Download size={13} /> Frais
+            </button>
+            <button
+              onClick={() => exportKmCSV(kmList)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all"
+              style={{ background: "rgba(16,185,129,0.12)", border: "1px solid rgba(16,185,129,0.25)", color: "#6ee7b7" }}
+              onMouseEnter={e => (e.currentTarget.style.background = "rgba(16,185,129,0.22)")}
+              onMouseLeave={e => (e.currentTarget.style.background = "rgba(16,185,129,0.12)")}
+            >
+              <Download size={13} /> KM
+            </button>
+          </div>
+        } />
 
         <main className="flex-1 p-5 md:p-6 pb-20 md:pb-8 space-y-5">
 

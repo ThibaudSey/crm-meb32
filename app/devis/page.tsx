@@ -1,9 +1,10 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { Plus, AlertTriangle, ChevronRight } from "lucide-react"
+import { Plus, AlertTriangle, ChevronRight, Download } from "lucide-react"
 import Sidebar from "@/components/Sidebar"
 import TopBar from "@/components/TopBar"
+import { exportToCSV, fmtDateExport } from "@/lib/export"
 
 // ─── Types & données ──────────────────────────────────────────────────────────
 
@@ -44,6 +45,46 @@ function fmt(n: number) {
   return new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 }).format(n) + " €"
 }
 
+function exportDevis() {
+  const today = Date.now()
+  exportToCSV(
+    DEVIS.map(d => {
+      const margeEur   = Math.round(d.totalHT * d.marge / 100)
+      const coutRevient = d.totalHT - margeEur
+      const jours = d.dateEnvoi
+        ? Math.floor((today - new Date(d.dateEnvoi).getTime()) / 86400000)
+        : null
+      return {
+        ref:          d.ref,
+        client:       d.client,
+        typeProjet:   d.typeProjet,
+        totalHT:      d.totalHT,
+        coutRevient,
+        margeEur,
+        margePct:     d.marge,
+        statut:       d.statut,
+        dateCreation: "",
+        dateEnvoi:    fmtDateExport(d.dateEnvoi),
+        jours:        jours ?? "",
+      }
+    }),
+    `devis-MEB32-${new Date().toISOString().slice(0, 7)}.csv`,
+    [
+      { key: "ref",          label: "Référence"           },
+      { key: "client",       label: "Client"              },
+      { key: "typeProjet",   label: "Type projet"         },
+      { key: "totalHT",      label: "Total HT €"          },
+      { key: "coutRevient",  label: "Coût revient €"      },
+      { key: "margeEur",     label: "Marge €"             },
+      { key: "margePct",     label: "Marge %"             },
+      { key: "statut",       label: "Statut"              },
+      { key: "dateCreation", label: "Date création"       },
+      { key: "dateEnvoi",    label: "Date envoi"          },
+      { key: "jours",        label: "Jours sans retour"   },
+    ]
+  )
+}
+
 const STATUT_STYLE: Record<Statut, { badge: string; label: string }> = {
   brouillon: { badge: "bg-white/10 border border-white/20 text-white/60",               label: "Brouillon" },
   envoye:    { badge: "bg-indigo-500/20 border border-indigo-500/40 text-indigo-300",   label: "Envoyé"    },
@@ -71,7 +112,17 @@ export default function DevisPage() {
       <Sidebar />
 
       <div className="flex-1 md:ml-60 flex flex-col min-h-screen">
-        <TopBar title="Devis" />
+        <TopBar title="Devis" actions={
+          <button
+            onClick={exportDevis}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all"
+            style={{ background: "rgba(99,102,241,0.15)", border: "1px solid rgba(99,102,241,0.3)", color: "#a5b4fc" }}
+            onMouseEnter={e => (e.currentTarget.style.background = "rgba(99,102,241,0.25)")}
+            onMouseLeave={e => (e.currentTarget.style.background = "rgba(99,102,241,0.15)")}
+          >
+            <Download size={13} /> Exporter
+          </button>
+        } />
 
         <main className="flex-1 p-5 md:p-6 pb-20 md:pb-6 space-y-4">
 

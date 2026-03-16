@@ -3,10 +3,11 @@
 import { useState, useMemo } from "react"
 import {
   ChevronLeft, ChevronRight, Plus, X, Copy, Check,
-  ChevronDown, MapPin, Clock, CheckSquare, Square,
+  ChevronDown, MapPin, Clock, CheckSquare, Square, Download,
 } from "lucide-react"
 import Sidebar from "@/components/Sidebar"
 import TopBar from "@/components/TopBar"
+import { exportToCSV, fmtDateExport } from "@/lib/export"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -50,6 +51,30 @@ const RDVS_INIT: RDV[] = [
   { id: 3, titre: "R2 Proposition Gauthier Volailles",affaire: "Gauthier Volailles – Extension",type: "R2 Proposition", date: "2026-03-11", heure: "10:00", duree: "1h30",  lieu: "Loué, 72540",           notes: "Apporter 2 exemplaires devis DEV-2026-002. Ne pas lâcher sur le prix, insister sur la garantie 10 ans." },
   { id: 4, titre: "Prospection Ferme Bertrand",       affaire: "—",                             type: "Prospection",    date: "2026-03-12", heure: "15:00", duree: "30min", lieu: "Téléphone",             notes: "" },
 ]
+
+function exportRDVs() {
+  exportToCSV(
+    RDVS_INIT.map(r => ({
+      date:    fmtDateExport(r.date),
+      heure:   r.heure,
+      titre:   r.titre,
+      type:    r.type,
+      affaire: r.affaire,
+      lieu:    r.lieu,
+      fait:    "non",
+    })),
+    `planning-MEB32-${new Date().toISOString().slice(0, 7)}.csv`,
+    [
+      { key: "date",    label: "Date"         },
+      { key: "heure",   label: "Heure"        },
+      { key: "titre",   label: "Titre"        },
+      { key: "type",    label: "Type RDV"     },
+      { key: "affaire", label: "Affaire liée" },
+      { key: "lieu",    label: "Lieu"         },
+      { key: "fait",    label: "Fait (oui/non)" },
+    ]
+  )
+}
 
 const TODOS_INIT = [
   { id: 1, texte: "Préparer devis SCEA Bretagne Plumes",         fait: false },
@@ -262,7 +287,17 @@ Aide-moi à préparer ce rendez-vous :
       <Sidebar />
 
       <div className="flex-1 md:ml-60 flex flex-col min-h-screen">
-        <TopBar title="Planning" />
+        <TopBar title="Planning" actions={
+          <button
+            onClick={exportRDVs}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all"
+            style={{ background: "rgba(99,102,241,0.15)", border: "1px solid rgba(99,102,241,0.3)", color: "#a5b4fc" }}
+            onMouseEnter={e => (e.currentTarget.style.background = "rgba(99,102,241,0.25)")}
+            onMouseLeave={e => (e.currentTarget.style.background = "rgba(99,102,241,0.15)")}
+          >
+            <Download size={13} /> Exporter
+          </button>
+        } />
 
         <main className="flex-1 p-5 md:p-6 pb-20 md:pb-6">
 

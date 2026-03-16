@@ -2,9 +2,10 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { Plus, Search, ChevronRight, ChevronDown } from "lucide-react"
+import { Plus, Search, ChevronRight, ChevronDown, Download } from "lucide-react"
 import Sidebar from "@/components/Sidebar"
 import TopBar from "@/components/TopBar"
+import { exportToCSV, fmtDateExport } from "@/lib/export"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -67,6 +68,40 @@ function fmt(n: number) {
   return new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 }).format(n) + " €"
 }
 
+function exportAffaires() {
+  exportToCSV(
+    AFFAIRES.map(a => ({
+      structure:    a.structure,
+      typeInter:    a.typeInter,
+      typeProjet:   a.typeProjet,
+      espece:       a.espece,
+      nbPlaces:     a.nbPlaces,
+      montant:      a.montant,
+      marge:        a.marge,
+      etape:        a.etape,
+      concurrent:   "",
+      dateDecision: fmtDateExport(a.dateDecision),
+      probabilite:  "",
+      soncas:       "",
+    })),
+    `affaires-MEB32-${new Date().toISOString().slice(0, 7)}.csv`,
+    [
+      { key: "structure",    label: "Nom affaire"       },
+      { key: "typeInter",    label: "Prospect"          },
+      { key: "typeProjet",   label: "Type projet"       },
+      { key: "espece",       label: "Espèce"            },
+      { key: "nbPlaces",     label: "Nb places"         },
+      { key: "montant",      label: "Montant estimé €"  },
+      { key: "marge",        label: "Marge %"           },
+      { key: "etape",        label: "Étape"             },
+      { key: "concurrent",   label: "Concurrent"        },
+      { key: "dateDecision", label: "Date décision"     },
+      { key: "probabilite",  label: "Probabilité %"     },
+      { key: "soncas",       label: "SONCAS dominant"   },
+    ]
+  )
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function AffairesPage() {
@@ -93,7 +128,17 @@ export default function AffairesPage() {
       <Sidebar />
 
       <div className="flex-1 md:ml-60 flex flex-col min-h-screen">
-        <TopBar title="Affaires" />
+        <TopBar title="Affaires" actions={
+          <button
+            onClick={exportAffaires}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all"
+            style={{ background: "rgba(99,102,241,0.15)", border: "1px solid rgba(99,102,241,0.3)", color: "#a5b4fc" }}
+            onMouseEnter={e => (e.currentTarget.style.background = "rgba(99,102,241,0.25)")}
+            onMouseLeave={e => (e.currentTarget.style.background = "rgba(99,102,241,0.15)")}
+          >
+            <Download size={13} /> Exporter
+          </button>
+        } />
 
         <main className="flex-1 p-5 md:p-6 pb-20 md:pb-6 space-y-4">
 
