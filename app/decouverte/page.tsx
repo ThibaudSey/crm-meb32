@@ -171,13 +171,13 @@ export default function DecouvertePage() {
   useEffect(() => {
     supabase
       .from("affaires")
-      .select("id, structure, type_projet, espece, nb_places")
-      .order("structure")
+      .select("id, nom, type_projet, espece, nb_places")
+      .order("nom")
       .then(({ data }) => {
         if (data) {
           setAffaires((data as Affaire[]).map(a => ({
             id: a.id,
-            label: `${a.structure} – ${a.type_projet} ${a.nb_places || ""} pl.`,
+            label: `${a.nom} – ${a.type_projet} ${a.nb_places || ""} pl.`,
           })))
         }
       })

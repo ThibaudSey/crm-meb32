@@ -16,19 +16,19 @@ export type TodoCat = "Relance" | "Admin" | "Technique" | "Urgence"
 export interface Affaire {
   id: string
   created_at: string
-  structure: string
+  nom: string
+  type_interlocuteur: string
   type_projet: string
   espece: string
   nb_places: number
   montant_estime: number
   marge: number
-  etape: string
-  type_inter: string
-  date_decision: string
+  decision_prevue: string | null
   concurrent: string | null
+  etape: string
+  prochaine_action: string | null
   notes_concurrence: string | null
   soncas: string | null
-  prochaine_action: string | null
 }
 
 // ─── Parties prenantes ────────────────────────────────────────────────────────

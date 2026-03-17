@@ -45,7 +45,7 @@ function ModalNouveauDevis({
   onClose,
   onCreated,
 }: {
-  affaires: Pick<Affaire, "id" | "structure">[]
+  affaires: Pick<Affaire, "id" | "nom">[]
   onClose: () => void
   onCreated: () => void
 }) {
@@ -141,7 +141,7 @@ function ModalNouveauDevis({
               <label className="block text-xs font-medium text-white/50 mb-1">Affaire liée (optionnel)</label>
               <select value={form.affaire_id} onChange={e => setF("affaire_id", e.target.value)} className="select-glass w-full">
                 <option value="">— Aucune affaire —</option>
-                {affaires.map(a => <option key={a.id} value={a.id}>{a.structure}</option>)}
+                {affaires.map(a => <option key={a.id} value={a.id}>{a.nom}</option>)}
               </select>
             </div>
           )}
@@ -167,7 +167,7 @@ function ModalNouveauDevis({
 export default function DevisPage() {
   const router = useRouter()
   const [devis, setDevis] = useState<Devis[]>([])
-  const [affaires, setAffaires] = useState<Pick<Affaire, "id" | "structure">[]>([])
+  const [affaires, setAffaires] = useState<Pick<Affaire, "id" | "nom">[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showNewDevis, setShowNewDevis] = useState(false)
@@ -175,7 +175,7 @@ export default function DevisPage() {
   useEffect(() => { fetchDevis(); fetchAffaires() }, [])
 
   async function fetchAffaires() {
-    const { data } = await supabase.from("affaires").select("id, structure").order("structure")
+    const { data } = await supabase.from("affaires").select("id, nom").order("nom")
     setAffaires(data || [])
   }
 

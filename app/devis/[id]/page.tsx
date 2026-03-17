@@ -90,7 +90,7 @@ export default function DevisEditorPage() {
   const [error, setError]               = useState<string | null>(null)
   const [devis, setDevis]               = useState<Devis | null>(null)
   const [lignes, setLignes]             = useState<DevisLigne[]>([])
-  const [affairesList, setAffairesList] = useState<Pick<Affaire, "id" | "structure">[]>([])
+  const [affairesList, setAffairesList] = useState<Pick<Affaire, "id" | "nom">[]>([])
 
   // ── Form state (mirrors devis fields) ────────────────────────────────────────
   const [statut, setStatut]               = useState<Statut>("brouillon")
@@ -111,7 +111,7 @@ export default function DevisEditorPage() {
       const [devisRes, lignesRes, affairesRes] = await Promise.all([
         supabase.from("devis").select("*").eq("id", id).single(),
         supabase.from("devis_lignes").select("*").eq("devis_id", id).order("ordre"),
-        supabase.from("affaires").select("id, structure").order("structure"),
+        supabase.from("affaires").select("id, nom").order("nom"),
       ])
 
       if (devisRes.error || !devisRes.data) {
@@ -128,7 +128,7 @@ export default function DevisEditorPage() {
       setNotes("")
 
       setLignes((lignesRes.data ?? []) as DevisLigne[])
-      setAffairesList((affairesRes.data ?? []) as Pick<Affaire, "id" | "structure">[])
+      setAffairesList((affairesRes.data ?? []) as Pick<Affaire, "id" | "nom">[])
     } catch {
       setError("Erreur lors du chargement du devis")
     } finally {
@@ -217,7 +217,7 @@ export default function DevisEditorPage() {
   }
 
   // ── Prompts IA ────────────────────────────────────────────────────────────────
-  const affaireLabel = affairesList.find((a) => a.id === affaireId)?.structure ?? "inconnue"
+  const affaireLabel = affairesList.find((a) => a.id === affaireId)?.nom ?? "inconnue"
   const ref = devis?.reference ?? `DEV-${id}`
 
   function buildPromptMarge() {
@@ -350,7 +350,7 @@ Prépare-moi :
                   >
                     <option value="">— Aucune —</option>
                     {affairesList.map((a) => (
-                      <option key={a.id} value={a.id}>{a.structure}</option>
+                      <option key={a.id} value={a.id}>{a.nom}</option>
                     ))}
                   </select>
                   <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: "rgba(255,255,255,0.4)" }} />

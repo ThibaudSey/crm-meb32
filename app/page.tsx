@@ -12,22 +12,45 @@ import type { Affaire, Todo, Devis } from "@/lib/types"
 
 const CA_OBJECTIF = 400000
 
-const ETAPES_PIPELINE = ["Prospection", "R1 Découverte", "R2 Proposition", "Négociation", "Signé"]
+// DB values for pipeline stages
+const ETAPES_PIPELINE = [
+  { dbValue: "prospection", label: "Prospection"    },
+  { dbValue: "r1",          label: "R1 Découverte"  },
+  { dbValue: "r2",          label: "R2 Proposition" },
+  { dbValue: "negociation", label: "Négociation"    },
+  { dbValue: "signe",       label: "Signé"          },
+]
 
 const ETAPE_BADGE: Record<string, string> = {
-  "Prospection":    "bg-sky-500/20 border border-sky-500/40 text-sky-300",
-  "R1 Découverte":  "bg-amber-500/20 border border-amber-500/40 text-amber-300",
-  "R2 Proposition": "bg-blue-500/20 border border-blue-500/40 text-blue-300",
-  "Négociation":    "bg-violet-500/20 border border-violet-500/40 text-violet-300",
-  "Signé":          "bg-emerald-500/20 border border-emerald-500/40 text-emerald-300",
-  "Perdu":          "bg-red-500/20 border border-red-500/40 text-red-300",
+  prospection: "bg-sky-500/20 border border-sky-500/40 text-sky-300",
+  r1:          "bg-amber-500/20 border border-amber-500/40 text-amber-300",
+  r2:          "bg-blue-500/20 border border-blue-500/40 text-blue-300",
+  negociation: "bg-violet-500/20 border border-violet-500/40 text-violet-300",
+  signe:       "bg-emerald-500/20 border border-emerald-500/40 text-emerald-300",
+  perdu:       "bg-red-500/20 border border-red-500/40 text-red-300",
+}
+
+const ETAPE_LABEL: Record<string, string> = {
+  prospection: "Prospection",
+  r1:          "R1 Découverte",
+  r2:          "R2 Proposition",
+  negociation: "Négociation",
+  signe:       "Signé",
+  perdu:       "Perdu",
 }
 
 const TYPE_BADGE: Record<string, string> = {
-  "Neuf":         "bg-indigo-500/20 border border-indigo-500/40 text-indigo-300",
-  "Rénovation":   "bg-amber-500/20 border border-amber-500/40 text-amber-300",
-  "Extension":    "bg-emerald-500/20 border border-emerald-500/40 text-emerald-300",
-  "Remplacement": "bg-red-500/20 border border-red-500/40 text-red-300",
+  neuf:         "bg-indigo-500/20 border border-indigo-500/40 text-indigo-300",
+  renovation:   "bg-amber-500/20 border border-amber-500/40 text-amber-300",
+  extension:    "bg-emerald-500/20 border border-emerald-500/40 text-emerald-300",
+  remplacement: "bg-red-500/20 border border-red-500/40 text-red-300",
+}
+
+const TYPE_PROJET_LABEL: Record<string, string> = {
+  neuf:         "Neuf",
+  renovation:   "Rénovation",
+  extension:    "Extension",
+  remplacement: "Remplacement",
 }
 
 const PIPELINE_GRADIENTS = [
@@ -129,8 +152,8 @@ export default function DashboardPage() {
   }, [])
 
   // ── Computed metrics ──
-  const affairesSignees  = useMemo(() => affaires.filter(a => a.etape === "Signé"), [affaires])
-  const affairesActives  = useMemo(() => affaires.filter(a => a.etape !== "Perdu"), [affaires])
+  const affairesSignees  = useMemo(() => affaires.filter(a => a.etape === "signe"), [affaires])
+  const affairesActives  = useMemo(() => affaires.filter(a => a.etape !== "perdu"), [affaires])
   const caSigne          = useMemo(() => affairesSignees.reduce((s, a) => s + (a.montant_estime ?? 0), 0), [affairesSignees])
   const pipelineTotal    = useMemo(() => affairesActives.reduce((s, a) => s + (a.montant_estime ?? 0), 0), [affairesActives])
   const margeMoyenne     = useMemo(() => {
@@ -145,10 +168,10 @@ export default function DashboardPage() {
       : 0,
   })).filter(d => d.jours > 0).sort((a, b) => b.jours - a.jours), [devis])
 
-  const pipeline = useMemo(() => ETAPES_PIPELINE.map(etape => {
-    const aff = affaires.filter(a => a.etape === etape)
+  const pipeline = useMemo(() => ETAPES_PIPELINE.map(({ dbValue, label }) => {
+    const aff = affaires.filter(a => a.etape === dbValue)
     return {
-      etape,
+      etape: label,
       affaires: aff.length,
       ca: aff.reduce((s, a) => s + (a.montant_estime ?? 0), 0),
     }
@@ -248,16 +271,16 @@ export default function DashboardPage() {
                     <tbody>
                       {dernieresAffaires.map((a) => (
                         <tr key={a.id} className="cursor-pointer">
-                          <td style={{ fontWeight: 600 }}>{a.structure}</td>
+                          <td style={{ fontWeight: 600 }}>{a.nom}</td>
                           <td className="hidden sm:table-cell">
                             <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium ${TYPE_BADGE[a.type_projet] ?? ""}`}>
-                              {a.type_projet}
+                              {TYPE_PROJET_LABEL[a.type_projet] ?? a.type_projet}
                             </span>
                           </td>
                           <td className="amount">{fmt(a.montant_estime ?? 0)}</td>
                           <td>
                             <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium ${ETAPE_BADGE[a.etape] ?? ""}`}>
-                              {a.etape}
+                              {ETAPE_LABEL[a.etape] ?? a.etape}
                             </span>
                           </td>
                         </tr>

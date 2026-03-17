@@ -162,7 +162,7 @@ export default function FicheFournisseurPage() {
           supabase.from("fournisseurs_contacts").select("*").eq("fournisseur_id", id),
           supabase.from("fournisseurs_produits").select("*").eq("fournisseur_id", id),
           supabase.from("demandes_devis_fournisseur").select("*").eq("fournisseur_id", id).order("created_at", { ascending: false }),
-          supabase.from("affaires").select("id, structure, type_projet, espece, nb_places").order("structure"),
+          supabase.from("affaires").select("id, nom, type_projet, espece, nb_places").order("nom"),
         ])
 
         if (fErr || !fournisseur) {
@@ -229,7 +229,7 @@ export default function FicheFournisseurPage() {
 
         setAffaires((affairesData as Affaire[] || []).map(a => ({
           id: a.id,
-          label: `${a.structure} – ${a.type_projet} ${a.nb_places}pl.`,
+          label: `${a.nom} – ${a.type_projet} ${a.nb_places}pl.`,
         })))
       } finally {
         setLoading(false)

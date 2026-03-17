@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Plus, X, ArrowRight, AlertTriangle, Loader2 } from "lucide-react"
+import { Plus, X, ArrowRight, Loader2 } from "lucide-react"
 import Sidebar from "@/components/Sidebar"
 import TopBar from "@/components/TopBar"
 import LoadingSpinner from "@/components/LoadingSpinner"
@@ -11,42 +11,79 @@ import type { Affaire } from "@/lib/types"
 
 // ─── Types locaux ─────────────────────────────────────────────────────────────
 
-type Etape = "Prospection" | "R1 Découverte" | "R2 Proposition" | "Négociation" | "Signé"
 type TypeProjet = "Neuf" | "Rénovation" | "Extension" | "Remplacement"
 type TypeInter = "Éleveur" | "Coopérative" | "Intégrateur"
 type Espece = "Poulet chair" | "Poulet label/bio" | "Dinde" | "Canard" | "Poule pondeuse"
 
+// ─── DB value mappings ────────────────────────────────────────────────────────
+
+const ETAPE_MAP: Record<string, string> = {
+  "Prospection":    "prospection",
+  "R1 Découverte":  "r1",
+  "R2 Proposition": "r2",
+  "Négociation":    "negociation",
+  "Signé":          "signe",
+}
+
+const TYPE_INTER_MAP: Record<string, string> = {
+  "Éleveur":     "eleveur",
+  "Coopérative": "cooperative",
+  "Intégrateur": "integrateur",
+}
+
+const TYPE_PROJET_MAP: Record<string, string> = {
+  "Neuf":         "neuf",
+  "Rénovation":   "renovation",
+  "Extension":    "extension",
+  "Remplacement": "remplacement",
+}
+
+// ─── DB → label mappings (for display) ───────────────────────────────────────
+
+const TYPE_PROJET_LABEL: Record<string, string> = {
+  neuf:         "Neuf",
+  renovation:   "Rénovation",
+  extension:    "Extension",
+  remplacement: "Remplacement",
+}
+
+const TYPE_INTER_LABEL: Record<string, string> = {
+  eleveur:     "Éleveur",
+  cooperative: "Coopérative",
+  integrateur: "Intégrateur",
+}
+
 // ─── Config colonnes ──────────────────────────────────────────────────────────
 
-const ETAPES: { label: Etape; dot: string }[] = [
-  { label: "Prospection",    dot: "bg-white/40"    },
-  { label: "R1 Découverte",  dot: "bg-indigo-400"  },
-  { label: "R2 Proposition", dot: "bg-amber-400"   },
-  { label: "Négociation",    dot: "bg-violet-400"  },
-  { label: "Signé",          dot: "bg-emerald-400" },
+const ETAPES: { label: string; dbValue: string; dot: string }[] = [
+  { label: "Prospection",    dbValue: "prospection", dot: "bg-white/40"    },
+  { label: "R1 Découverte",  dbValue: "r1",          dot: "bg-indigo-400"  },
+  { label: "R2 Proposition", dbValue: "r2",          dot: "bg-amber-400"   },
+  { label: "Négociation",    dbValue: "negociation", dot: "bg-violet-400"  },
+  { label: "Signé",          dbValue: "signe",       dot: "bg-emerald-400" },
 ]
 
-const ETAPE_SUIVANTE: Record<Etape, Etape | null> = {
-  "Prospection":    "R1 Découverte",
-  "R1 Découverte":  "R2 Proposition",
-  "R2 Proposition": "Négociation",
-  "Négociation":    "Signé",
-  "Signé":          null,
+const ETAPE_SUIVANTE: Record<string, string | null> = {
+  "prospection": "r1",
+  "r1":          "r2",
+  "r2":          "negociation",
+  "negociation": "signe",
+  "signe":       null,
 }
 
 // ─── Badge styles ─────────────────────────────────────────────────────────────
 
-const TYPE_PROJET_STYLE: Record<TypeProjet, string> = {
-  Neuf:         "bg-indigo-500/20 border border-indigo-500/40 text-indigo-300",
-  Rénovation:   "bg-amber-500/20 border border-amber-500/40 text-amber-300",
-  Extension:    "bg-emerald-500/20 border border-emerald-500/40 text-emerald-300",
-  Remplacement: "bg-red-500/20 border border-red-500/40 text-red-300",
+const TYPE_PROJET_STYLE: Record<string, string> = {
+  neuf:         "bg-indigo-500/20 border border-indigo-500/40 text-indigo-300",
+  renovation:   "bg-amber-500/20 border border-amber-500/40 text-amber-300",
+  extension:    "bg-emerald-500/20 border border-emerald-500/40 text-emerald-300",
+  remplacement: "bg-red-500/20 border border-red-500/40 text-red-300",
 }
 
-const TYPE_INTER_STYLE: Record<TypeInter, string> = {
-  Éleveur:      "bg-emerald-500/20 border border-emerald-500/40 text-emerald-300",
-  Coopérative:  "bg-violet-500/20 border border-violet-500/40 text-violet-300",
-  Intégrateur:  "bg-indigo-500/20 border border-indigo-500/40 text-indigo-300",
+const TYPE_INTER_STYLE: Record<string, string> = {
+  eleveur:     "bg-emerald-500/20 border border-emerald-500/40 text-emerald-300",
+  cooperative: "bg-violet-500/20 border border-violet-500/40 text-violet-300",
+  integrateur: "bg-indigo-500/20 border border-indigo-500/40 text-indigo-300",
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -66,7 +103,7 @@ const FORM_VIDE = {
   montant_estime: "",
   date_decision: "",
   concurrent: "",
-  etape: "Prospection" as Etape,
+  etape: "Prospection",
 }
 
 // ─── Composant Card ───────────────────────────────────────────────────────────
@@ -78,7 +115,8 @@ function AffaireCard({
   affaire: Affaire
   onAvancer: (id: string) => void
 }) {
-  const peutAvancer = ETAPE_SUIVANTE[affaire.etape as Etape] !== null
+  const peutAvancer = ETAPE_SUIVANTE[affaire.etape] !== null
+  const etapeConfig = ETAPES.find(e => e.dbValue === affaire.etape)
 
   return (
     <div
@@ -86,16 +124,16 @@ function AffaireCard({
     >
       {/* Header */}
       <div className="flex items-start justify-between gap-2">
-        <p className="font-semibold text-[#f1f5f9] text-sm leading-tight">{affaire.structure}</p>
+        <p className="font-semibold text-[#f1f5f9] text-sm leading-tight">{affaire.nom}</p>
       </div>
 
       {/* Badges type projet + interlocuteur */}
       <div className="flex flex-wrap gap-1">
-        <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${TYPE_PROJET_STYLE[affaire.type_projet as TypeProjet] ?? "bg-white/10 text-white/50"}`}>
-          {affaire.type_projet}
+        <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${TYPE_PROJET_STYLE[affaire.type_projet] ?? "bg-white/10 text-white/50"}`}>
+          {TYPE_PROJET_LABEL[affaire.type_projet] ?? affaire.type_projet}
         </span>
-        <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${TYPE_INTER_STYLE[affaire.type_inter as TypeInter] ?? "bg-white/10 text-white/50"}`}>
-          {affaire.type_inter}
+        <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${TYPE_INTER_STYLE[affaire.type_interlocuteur] ?? "bg-white/10 text-white/50"}`}>
+          {TYPE_INTER_LABEL[affaire.type_interlocuteur] ?? affaire.type_interlocuteur}
         </span>
       </div>
 
@@ -108,7 +146,7 @@ function AffaireCard({
         {peutAvancer && (
           <button
             onClick={() => onAvancer(affaire.id)}
-            title={`Avancer vers ${ETAPE_SUIVANTE[affaire.etape as Etape]}`}
+            title={`Avancer vers ${etapeConfig ? ETAPES[ETAPES.indexOf(etapeConfig) + 1]?.label : ""}`}
             className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg transition-colors"
             style={{ color: "rgba(255,255,255,0.5)" }}
             onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.08)")}
@@ -121,7 +159,7 @@ function AffaireCard({
 
       {/* Info décision */}
       <p className="text-[11px] text-white/35 pt-2" style={{ borderTop: "1px solid rgba(255,255,255,0.07)" }}>
-        Décision : {affaire.date_decision ? new Date(affaire.date_decision).toLocaleDateString("fr-FR") : "—"}
+        Décision : {affaire.decision_prevue ? new Date(affaire.decision_prevue).toLocaleDateString("fr-FR") : "—"}
         {affaire.concurrent && (
           <span className="ml-1 text-white/35">· {affaire.concurrent}</span>
         )}
@@ -154,17 +192,17 @@ function ModalNouvelleAffaire({
     setFormError(null)
     try {
       await onAjouter({
-        structure:        form.structure,
-        type_inter:       form.type_inter,
-        type_projet:      form.type_projet,
-        espece:           form.espece,
-        nb_places:        parseInt(form.nb_places) || 0,
-        montant_estime:   parseInt(form.montant_estime) || 0,
-        marge:            0,
-        date_decision:    form.date_decision || "2026-12-31",
-        concurrent:       form.concurrent || null,
-        etape:            form.etape,
-        prochaine_action: null,
+        nom:                form.structure,
+        type_interlocuteur: TYPE_INTER_MAP[form.type_inter] ?? "eleveur",
+        type_projet:        TYPE_PROJET_MAP[form.type_projet] ?? "neuf",
+        espece:             form.espece,
+        nb_places:          parseInt(form.nb_places) || 0,
+        montant_estime:     parseInt(form.montant_estime) || 0,
+        marge:              0,
+        decision_prevue:    form.date_decision || null,
+        concurrent:         form.concurrent || null,
+        etape:              ETAPE_MAP[form.etape] ?? "prospection",
+        prochaine_action:   null,
       })
       onClose()
     } catch (err: unknown) {
@@ -312,7 +350,7 @@ function ModalNouvelleAffaire({
               className="select-glass w-full"
             >
               {ETAPES.map((e) => (
-                <option key={e.label}>{e.label}</option>
+                <option key={e.label} value={e.label}>{e.label}</option>
               ))}
             </select>
           </div>
@@ -347,7 +385,7 @@ export default function PipelinePage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [modalOuvert, setModalOuvert] = useState(false)
-  const [filtreEtapeMobile, setFiltreEtapeMobile] = useState<Etape | "Toutes">("Toutes")
+  const [filtreEtapeMobile, setFiltreEtapeMobile] = useState<string>("Toutes")
 
   useEffect(() => { fetchAffaires() }, [])
 
@@ -371,7 +409,7 @@ export default function PipelinePage() {
   async function avancerAffaire(id: string) {
     const affaire = affaires.find((a) => a.id === id)
     if (!affaire) return
-    const suivante = ETAPE_SUIVANTE[affaire.etape as Etape]
+    const suivante = ETAPE_SUIVANTE[affaire.etape]
     if (!suivante) return
     await supabase.from("affaires").update({ etape: suivante }).eq("id", id)
     setAffaires((prev) =>
@@ -383,13 +421,16 @@ export default function PipelinePage() {
     data: Omit<Affaire, "id" | "created_at" | "notes_concurrence" | "soncas">
   ) {
     const { error } = await supabase.from("affaires").insert([data])
-    if (error) throw error
+    if (error) {
+      console.error("Supabase error details:", error)
+      throw error
+    }
     await fetchAffaires()
   }
 
   // Totaux par colonne
-  function colStats(etape: Etape) {
-    const items = affaires.filter((a) => a.etape === etape)
+  function colStats(dbValue: string) {
+    const items = affaires.filter((a) => a.etape === dbValue)
     return {
       items,
       total: items.reduce((s, a) => s + (a.montant_estime ?? 0), 0),
@@ -399,7 +440,10 @@ export default function PipelinePage() {
   const affairesMobileFiltrees =
     filtreEtapeMobile === "Toutes"
       ? affaires
-      : affaires.filter((a) => a.etape === filtreEtapeMobile)
+      : affaires.filter((a) => {
+          const etapeConfig = ETAPES.find(e => e.label === filtreEtapeMobile)
+          return a.etape === etapeConfig?.dbValue
+        })
 
   if (loading) {
     return (
@@ -470,16 +514,19 @@ export default function PipelinePage() {
               className="flex gap-2 overflow-x-auto pb-2 mb-4 -mx-4 px-4"
               style={{ scrollbarWidth: "none" }}
             >
-              {(["Toutes", ...ETAPES.map((e) => e.label)] as (Etape | "Toutes")[]).map((etape) => {
-                const active = filtreEtapeMobile === etape
+              {(["Toutes", ...ETAPES.map((e) => e.label)]).map((etapeLabel) => {
+                const active = filtreEtapeMobile === etapeLabel
                 const count =
-                  etape === "Toutes"
+                  etapeLabel === "Toutes"
                     ? affaires.length
-                    : affaires.filter((a) => a.etape === etape).length
+                    : affaires.filter((a) => {
+                        const cfg = ETAPES.find(e => e.label === etapeLabel)
+                        return a.etape === cfg?.dbValue
+                      }).length
                 return (
                   <button
-                    key={etape}
-                    onClick={() => setFiltreEtapeMobile(etape)}
+                    key={etapeLabel}
+                    onClick={() => setFiltreEtapeMobile(etapeLabel)}
                     className="shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-full text-sm font-medium transition-all"
                     style={
                       active
@@ -495,7 +542,7 @@ export default function PipelinePage() {
                           }
                     }
                   >
-                    {etape}
+                    {etapeLabel}
                     <span className="text-[11px] font-bold opacity-70">({count})</span>
                   </button>
                 )
@@ -517,10 +564,10 @@ export default function PipelinePage() {
 
           {/* ── Vue desktop : Kanban board ── */}
           <div className="hidden md:flex gap-4 overflow-x-auto pb-4">
-            {ETAPES.map(({ label, dot }) => {
-              const { items, total } = colStats(label)
+            {ETAPES.map(({ label, dbValue, dot }) => {
+              const { items, total } = colStats(dbValue)
               return (
-                <div key={label} className="flex-shrink-0 w-64 flex flex-col gap-3">
+                <div key={dbValue} className="flex-shrink-0 w-64 flex flex-col gap-3">
                   {/* En-tête colonne */}
                   <div className="glass px-4 py-3">
                     <div className="flex items-center gap-2 mb-1">

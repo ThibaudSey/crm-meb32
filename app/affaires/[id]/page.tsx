@@ -60,15 +60,30 @@ function isDepasse(date: string) {
 
 // ─── Prompts IA ───────────────────────────────────────────────────────────────
 
+const TYPE_PROJET_LABEL: Record<string, string> = {
+  neuf:         "Neuf",
+  renovation:   "Rénovation",
+  extension:    "Extension",
+  remplacement: "Remplacement",
+}
+
+const TYPE_INTER_LABEL: Record<string, string> = {
+  eleveur:     "Éleveur",
+  cooperative: "Coopérative",
+  integrateur: "Intégrateur",
+}
+
 function buildPrompts(a: Affaire, soncasActifs: string[]) {
   const soncas = soncasActifs.length ? soncasActifs.join(", ") : "non renseigné"
+  const typeProjetLabel = TYPE_PROJET_LABEL[a.type_projet] ?? a.type_projet
+  const typeInterLabel  = TYPE_INTER_LABEL[a.type_interlocuteur] ?? a.type_interlocuteur
   return {
     r1: `Tu es un commercial spécialisé en équipement d'élevage avicole.
-Je prépare ma première visite (R1 Découverte) chez ${a.structure}.
+Je prépare ma première visite (R1 Découverte) chez ${a.nom}.
 
 Profil du client :
-- Type : ${a.type_inter}
-- Projet : ${a.type_projet} de bâtiment ${a.espece}
+- Type : ${typeInterLabel}
+- Projet : ${typeProjetLabel} de bâtiment ${a.espece}
 - Capacité estimée : ${a.nb_places.toLocaleString("fr-FR")} places
 - Concurrent identifié : ${a.concurrent ?? "inconnu"}
 
@@ -79,9 +94,9 @@ Génère pour moi :
 4. Les éléments différenciants à mettre en avant dès ce premier rendez-vous`,
 
     r2: `Tu es un expert commercial en équipement avicole.
-Je prépare ma proposition commerciale (R2) pour ${a.structure}.
+Je prépare ma proposition commerciale (R2) pour ${a.nom}.
 
-Projet : ${a.type_projet} ${a.espece}, ${a.nb_places.toLocaleString("fr-FR")} places
+Projet : ${typeProjetLabel} ${a.espece}, ${a.nb_places.toLocaleString("fr-FR")} places
 Budget estimé : ${fmt(a.montant_estime)}
 Concurrent : ${a.concurrent ?? "inconnu"}
 Profil SONCAS activé : ${soncas}
@@ -92,7 +107,7 @@ Génère :
 3. Les questions de confirmation de valeur à poser avant d'annoncer le prix
 4. Le wording recommandé pour l'annonce du prix en ancrant la valeur`,
 
-    prix: `Un client (${a.structure}) en négociation pour un projet ${a.type_projet} ${a.espece} (${a.nb_places.toLocaleString("fr-FR")} places) me dit que notre offre à ${fmt(a.montant_estime)} est trop chère par rapport à ${a.concurrent ?? "la concurrence"}.
+    prix: `Un client (${a.nom}) en négociation pour un projet ${typeProjetLabel} ${a.espece} (${a.nb_places.toLocaleString("fr-FR")} places) me dit que notre offre à ${fmt(a.montant_estime)} est trop chère par rapport à ${a.concurrent ?? "la concurrence"}.
 
 Profil SONCAS activé : ${soncas}
 
@@ -338,7 +353,7 @@ export default function AffaireDetailPage() {
       <Sidebar />
 
       <div className="flex-1 md:ml-60 flex flex-col min-h-screen">
-        <TopBar title={affaire.structure} />
+        <TopBar title={affaire.nom} />
 
         <main className="flex-1 p-5 md:p-6 pb-20 md:pb-6">
 
@@ -362,8 +377,8 @@ export default function AffaireDetailPage() {
               <div className="glass p-5">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <h2 className="text-xl font-bold" style={{ color: "#f1f5f9" }}>{affaire.structure}</h2>
-                    <p className="text-sm mt-0.5" style={{ color: "rgba(255,255,255,0.5)" }}>{affaire.type_inter}</p>
+                    <h2 className="text-xl font-bold" style={{ color: "#f1f5f9" }}>{affaire.nom}</h2>
+                    <p className="text-sm mt-0.5" style={{ color: "rgba(255,255,255,0.5)" }}>{TYPE_INTER_LABEL[affaire.type_interlocuteur] ?? affaire.type_interlocuteur}</p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <span className="px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-amber-500/20 border border-amber-500/40 text-amber-300">
@@ -392,12 +407,12 @@ export default function AffaireDetailPage() {
                 <h3 className="text-sm font-semibold mb-3" style={{ color: "#f1f5f9" }}>Infos clés</h3>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                   {[
-                    { label: "Type projet",    value: affaire.type_projet },
+                    { label: "Type projet",    value: TYPE_PROJET_LABEL[affaire.type_projet] ?? affaire.type_projet },
                     { label: "Espèce",         value: affaire.espece },
                     { label: "Nb de places",   value: affaire.nb_places.toLocaleString("fr-FR") },
                     { label: "Montant estimé", value: fmt(affaire.montant_estime), green: true },
                     { label: "Marge estimée",  value: `${affaire.marge}%`, marge: true },
-                    { label: "Date décision",  value: affaire.date_decision ? new Date(affaire.date_decision).toLocaleDateString("fr-FR") : "—" },
+                    { label: "Date décision",  value: affaire.decision_prevue ? new Date(affaire.decision_prevue).toLocaleDateString("fr-FR") : "—" },
                   ].map(({ label, value, green, marge }) => (
                     <div key={label} style={{ background: "rgba(255,255,255,0.06)", borderRadius: "12px" }} className="px-3 py-2.5">
                       <p className="text-xs mb-0.5 text-white/40">{label}</p>
@@ -710,7 +725,7 @@ export default function AffaireDetailPage() {
                           <button
                             onClick={() => ouvrirPrompt(
                               "Structurer cette note avec Claude",
-                              `Tu es un assistant CRM commercial avicole.\n\nVoici une note brute prise lors d'un ${note.type.toLowerCase()} avec ${affaire.structure} le ${new Date(note.date).toLocaleDateString("fr-FR")} :\n\n"${note.contenu}"\n\nStructure cette note en :\n1. Résumé en 2 phrases\n2. Points clés identifiés (besoins, objections, opportunités)\n3. Actions recommandées suite à ce ${note.type.toLowerCase()}\n4. Signaux d'achat détectés`
+                              `Tu es un assistant CRM commercial avicole.\n\nVoici une note brute prise lors d'un ${note.type.toLowerCase()} avec ${affaire.nom} le ${new Date(note.date).toLocaleDateString("fr-FR")} :\n\n"${note.contenu}"\n\nStructure cette note en :\n1. Résumé en 2 phrases\n2. Points clés identifiés (besoins, objections, opportunités)\n3. Actions recommandées suite à ce ${note.type.toLowerCase()}\n4. Signaux d'achat détectés`
                             )}
                             className="mt-1.5 text-xs flex items-center gap-1 transition-colors"
                             style={{ color: "rgba(255,255,255,0.35)" }}

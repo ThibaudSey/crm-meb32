@@ -109,14 +109,14 @@ function exportKmCSV(km: KmEntry[]) {
   )
 }
 
-function exportCSV(frais: FraisEntry[], km: KmEntry[], month: number, year: number, affaires: Pick<Affaire, "id" | "structure">[]) {
+function exportCSV(frais: FraisEntry[], km: KmEntry[], month: number, year: number, affaires: Pick<Affaire, "id" | "nom">[]) {
   let csv = "Type,Date,Description,Affaire,Montant TTC,Catégorie / Véhicule,Détail\n"
   frais.forEach(f => {
-    const aff = affaires.find(a => a.id === f.affaire_id)?.structure ?? ""
+    const aff = affaires.find(a => a.id === f.affaire_id)?.nom ?? ""
     csv += `Frais,${f.date},"${f.description}","${aff}",${f.montant_ttc},"${f.categorie}",""\n`
   })
   km.forEach(k => {
-    const aff = affaires.find(a => a.id === k.affaire_id)?.structure ?? ""
+    const aff = affaires.find(a => a.id === k.affaire_id)?.nom ?? ""
     csv += `Kilométrique,${k.date},"${k.depart} → ${k.arrivee}","${aff}",${k.indemnite},"${k.vehicule} (${k.puissance_fiscale}CV)","${k.km}km × ${k.taux_ik}€/km"\n`
   })
   const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" })
@@ -138,7 +138,7 @@ export default function FraisPage() {
   const [fraisList, setFraisList]   = useState<FraisEntry[]>([])
   const [kmList, setKmList]         = useState<KmEntry[]>([])
   const [vehicules, setVehicules]   = useState<Vehicule[]>([])
-  const [affaires, setAffaires]     = useState<Pick<Affaire, "id" | "structure">[]>([])
+  const [affaires, setAffaires]     = useState<Pick<Affaire, "id" | "nom">[]>([])
   const [loading, setLoading]       = useState(true)
   const [error, setError]           = useState<string | null>(null)
 
@@ -160,7 +160,7 @@ export default function FraisPage() {
         supabase.from("frais").select("*").order("date", { ascending: false }),
         supabase.from("km_entries").select("*").order("date", { ascending: false }),
         supabase.from("vehicules").select("*"),
-        supabase.from("affaires").select("id, structure").order("structure"),
+        supabase.from("affaires").select("id, nom").order("nom"),
       ])
       if (fraisRes.error)   throw fraisRes.error
       if (kmRes.error)      throw kmRes.error
@@ -421,7 +421,7 @@ export default function FraisPage() {
                                 </td>
                                 <td className="py-2.5 px-3 text-sm" style={{ color: "#f1f5f9" }}>{f.description}</td>
                                 <td className="py-2.5 px-3 text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>
-                                  {f.affaire_id ? (affaires.find(a => a.id === f.affaire_id)?.structure ?? f.affaire_id) : "—"}
+                                  {f.affaire_id ? (affaires.find(a => a.id === f.affaire_id)?.nom ?? f.affaire_id) : "—"}
                                 </td>
                                 <td className="py-2.5 px-3 font-semibold text-right" style={{ color: "#f1f5f9" }}>
                                   {fmt(f.montant_ttc)}
@@ -502,7 +502,7 @@ export default function FraisPage() {
                                 )}
                               </td>
                               <td className="py-2.5 px-3 text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>
-                                {k.affaire_id ? (affaires.find(a => a.id === k.affaire_id)?.structure ?? k.affaire_id) : "—"}
+                                {k.affaire_id ? (affaires.find(a => a.id === k.affaire_id)?.nom ?? k.affaire_id) : "—"}
                               </td>
                               <td className="py-2.5 px-3 font-medium" style={{ color: "#f1f5f9" }}>{k.km} km</td>
                               <td className="py-2.5 px-3 text-xs" style={{ color: "rgba(255,255,255,0.55)" }}>{k.vehicule}</td>
@@ -710,7 +710,7 @@ function AddFraisModal({
   onSave,
 }: {
   initial: FraisEntry | null
-  affaires: Pick<Affaire, "id" | "structure">[]
+  affaires: Pick<Affaire, "id" | "nom">[]
   onClose: () => void
   onSave: (f: FraisEntry) => void
 }) {
@@ -883,7 +883,7 @@ function AddFraisModal({
             <label className="block text-xs mb-1.5" style={{ color: "rgba(255,255,255,0.5)" }}>Affaire liée (optionnel)</label>
             <select className="select-glass w-full" value={form.affaire_id} onChange={e => setF("affaire_id", e.target.value)}>
               <option value="">— Aucune affaire —</option>
-              {affaires.map(a => <option key={a.id} value={a.id}>{a.structure}</option>)}
+              {affaires.map(a => <option key={a.id} value={a.id}>{a.nom}</option>)}
             </select>
           </div>
 
@@ -919,7 +919,7 @@ function AddKmModal({
   onSave,
 }: {
   vehicules: Vehicule[]
-  affaires: Pick<Affaire, "id" | "structure">[]
+  affaires: Pick<Affaire, "id" | "nom">[]
   onClose: () => void
   onSave: (k: KmEntry) => void
 }) {
@@ -1018,7 +1018,7 @@ function AddKmModal({
             <label className="block text-xs mb-1.5" style={{ color: "rgba(255,255,255,0.5)" }}>Affaire liée (optionnel)</label>
             <select className="select-glass w-full" value={form.affaire_id} onChange={e => setF("affaire_id", e.target.value)}>
               <option value="">— Aucune affaire —</option>
-              {affaires.map(a => <option key={a.id} value={a.id}>{a.structure}</option>)}
+              {affaires.map(a => <option key={a.id} value={a.id}>{a.nom}</option>)}
             </select>
           </div>
 
@@ -1362,7 +1362,7 @@ function PrintModal({
   frais: FraisEntry[]; km: KmEntry[]
   month: number; year: number
   totalFrais: number; totalKm: number; totalIndemnites: number
-  affaires: Pick<Affaire, "id" | "structure">[]
+  affaires: Pick<Affaire, "id" | "nom">[]
   onClose: () => void
 }) {
   return (
@@ -1411,7 +1411,7 @@ function PrintModal({
                       <td className="p-2 border" style={{ borderColor: "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.6)" }}>{f.date.split("-").reverse().join("/")}</td>
                       <td className="p-2 border" style={{ borderColor: "rgba(255,255,255,0.07)", color: "#f1f5f9" }}>{catConfig(f.categorie).icon} {catConfig(f.categorie).label}</td>
                       <td className="p-2 border" style={{ borderColor: "rgba(255,255,255,0.07)", color: "#f1f5f9" }}>{f.description}</td>
-                      <td className="p-2 border" style={{ borderColor: "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.5)" }}>{affaires.find(a => a.id === f.affaire_id)?.structure ?? "—"}</td>
+                      <td className="p-2 border" style={{ borderColor: "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.5)" }}>{affaires.find(a => a.id === f.affaire_id)?.nom ?? "—"}</td>
                       <td className="p-2 border text-right font-semibold" style={{ borderColor: "rgba(255,255,255,0.07)", color: "#f1f5f9" }}>{fmt(f.montant_ttc)}</td>
                     </tr>
                   ))}

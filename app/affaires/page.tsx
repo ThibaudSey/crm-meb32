@@ -11,30 +11,50 @@ import { supabase } from "@/lib/supabase"
 import type { Affaire } from "@/lib/types"
 import { exportToCSV, fmtDateExport } from "@/lib/export"
 
-// ─── Types locaux ─────────────────────────────────────────────────────────────
-
-type Etape = "Prospection" | "R1 Découverte" | "R2 Proposition" | "Négociation" | "Signé"
-type TypeProjet = "Neuf" | "Rénovation" | "Extension" | "Remplacement"
-
 // ─── Badge styles ─────────────────────────────────────────────────────────────
 
+// DB → display label mappings
+const ETAPE_LABEL: Record<string, string> = {
+  prospection: "Prospection",
+  r1:          "R1 Découverte",
+  r2:          "R2 Proposition",
+  negociation: "Négociation",
+  signe:       "Signé",
+  perdu:       "Perdu",
+}
+
+const TYPE_INTER_LABEL: Record<string, string> = {
+  eleveur:     "Éleveur",
+  cooperative: "Coopérative",
+  integrateur: "Intégrateur",
+}
+
+const TYPE_PROJET_LABEL: Record<string, string> = {
+  neuf:         "Neuf",
+  renovation:   "Rénovation",
+  extension:    "Extension",
+  remplacement: "Remplacement",
+}
+
 const ETAPE_STYLE: Record<string, string> = {
-  "Prospection":    "bg-white/10 border border-white/20 text-white/60",
-  "R1 Découverte":  "bg-indigo-500/20 border border-indigo-500/40 text-indigo-300",
-  "R2 Proposition": "bg-amber-500/20 border border-amber-500/40 text-amber-300",
-  "Négociation":    "bg-violet-500/20 border border-violet-500/40 text-violet-300",
-  "Signé":          "bg-emerald-500/20 border border-emerald-500/40 text-emerald-300",
+  prospection: "bg-white/10 border border-white/20 text-white/60",
+  r1:          "bg-indigo-500/20 border border-indigo-500/40 text-indigo-300",
+  r2:          "bg-amber-500/20 border border-amber-500/40 text-amber-300",
+  negociation: "bg-violet-500/20 border border-violet-500/40 text-violet-300",
+  signe:       "bg-emerald-500/20 border border-emerald-500/40 text-emerald-300",
+  perdu:       "bg-red-500/20 border border-red-500/40 text-red-300",
 }
 
 const TYPE_PROJET_STYLE: Record<string, string> = {
-  Neuf:         "bg-indigo-500/20 border border-indigo-500/40 text-indigo-300",
-  Rénovation:   "bg-amber-500/20 border border-amber-500/40 text-amber-300",
-  Extension:    "bg-emerald-500/20 border border-emerald-500/40 text-emerald-300",
-  Remplacement: "bg-red-500/20 border border-red-500/40 text-red-300",
+  neuf:         "bg-indigo-500/20 border border-indigo-500/40 text-indigo-300",
+  renovation:   "bg-amber-500/20 border border-amber-500/40 text-amber-300",
+  extension:    "bg-emerald-500/20 border border-emerald-500/40 text-emerald-300",
+  remplacement: "bg-red-500/20 border border-red-500/40 text-red-300",
 }
 
-const ETAPES_OPTIONS: ("Toutes" | Etape)[] = [
-  "Toutes", "Prospection", "R1 Découverte", "R2 Proposition", "Négociation", "Signé",
+// Filter options use DB values (prefixed "Toutes" for no filter)
+const ETAPES_OPTIONS: string[] = [
+  "Toutes", "prospection", "r1", "r2", "negociation", "signe", "perdu",
 ]
 
 function fmt(n: number) {
@@ -48,7 +68,7 @@ export default function AffairesPage() {
   const [affaires, setAffaires] = useState<Affaire[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [filtreEtape, setFiltreEtape] = useState<"Toutes" | Etape>("Toutes")
+  const [filtreEtape, setFiltreEtape] = useState<string>("Toutes")
   const [recherche, setRecherche]     = useState("")
   const [navigueVers, setNavigueVers] = useState("")
 
@@ -74,7 +94,7 @@ export default function AffairesPage() {
   const affairesFiltrees = affaires.filter((a) => {
     const matchEtape = filtreEtape === "Toutes" || a.etape === filtreEtape
     const matchRecherche =
-      a.structure.toLowerCase().includes(recherche.toLowerCase()) ||
+      a.nom.toLowerCase().includes(recherche.toLowerCase()) ||
       a.espece.toLowerCase().includes(recherche.toLowerCase())
     return matchEtape && matchRecherche
   })
@@ -87,16 +107,16 @@ export default function AffairesPage() {
   function exportAffaires() {
     exportToCSV(
       affaires.map((a) => ({
-        structure:    a.structure,
-        typeInter:    a.type_inter,
-        typeProjet:   a.type_projet,
+        structure:    a.nom,
+        typeInter:    TYPE_INTER_LABEL[a.type_interlocuteur] ?? a.type_interlocuteur,
+        typeProjet:   TYPE_PROJET_LABEL[a.type_projet] ?? a.type_projet,
         espece:       a.espece,
         nbPlaces:     a.nb_places,
         montant:      a.montant_estime,
         marge:        a.marge,
-        etape:        a.etape,
+        etape:        ETAPE_LABEL[a.etape] ?? a.etape,
         concurrent:   a.concurrent ?? "",
-        dateDecision: fmtDateExport(a.date_decision),
+        dateDecision: fmtDateExport(a.decision_prevue ?? ""),
         probabilite:  "",
         soncas:       a.soncas ?? "",
       })),
@@ -196,7 +216,7 @@ export default function AffairesPage() {
                   : { background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.6)" }
                 }
               >
-                {e}
+                {e === "Toutes" ? "Toutes" : (ETAPE_LABEL[e] ?? e)}
               </button>
             ))}
           </div>
@@ -212,7 +232,7 @@ export default function AffairesPage() {
               <option value="">Accéder à une affaire…</option>
               {affaires.map((a) => (
                 <option key={a.id} value={a.id}>
-                  {a.structure}
+                  {a.nom}
                 </option>
               ))}
             </select>
@@ -220,11 +240,11 @@ export default function AffairesPage() {
             {/* Filtre étape */}
             <select
               value={filtreEtape}
-              onChange={(e) => setFiltreEtape(e.target.value as typeof filtreEtape)}
+              onChange={(e) => setFiltreEtape(e.target.value)}
               className="select-glass"
             >
               {ETAPES_OPTIONS.map((e) => (
-                <option key={e}>{e}</option>
+                <option key={e} value={e}>{e === "Toutes" ? "Toutes" : (ETAPE_LABEL[e] ?? e)}</option>
               ))}
             </select>
 
@@ -274,8 +294,8 @@ export default function AffairesPage() {
               >
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <div>
-                    <p className="font-bold text-sm" style={{ color: "#f1f5f9" }}>{a.structure}</p>
-                    <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.4)" }}>{a.type_inter}</p>
+                    <p className="font-bold text-sm" style={{ color: "#f1f5f9" }}>{a.nom}</p>
+                    <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.4)" }}>{TYPE_INTER_LABEL[a.type_interlocuteur] ?? a.type_interlocuteur}</p>
                   </div>
                   <span className="text-base font-bold whitespace-nowrap" style={{ color: "#10b981" }}>
                     {fmt(a.montant_estime ?? 0)}
@@ -283,10 +303,10 @@ export default function AffairesPage() {
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium ${ETAPE_STYLE[a.etape] ?? "bg-white/10 text-white/50"}`}>
-                    {a.etape}
+                    {ETAPE_LABEL[a.etape] ?? a.etape}
                   </span>
                   <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium ${TYPE_PROJET_STYLE[a.type_projet] ?? "bg-white/10 text-white/50"}`}>
-                    {a.type_projet}
+                    {TYPE_PROJET_LABEL[a.type_projet] ?? a.type_projet}
                   </span>
                   <span className="text-xs ml-auto font-semibold" style={{
                     color: a.marge >= 35 ? "#10b981" : a.marge >= 30 ? "#f59e0b" : "#ef4444"
@@ -325,17 +345,17 @@ export default function AffairesPage() {
                       className="cursor-pointer transition-colors group"
                     >
                       <td className="px-5 py-3.5">
-                        <div className="font-semibold text-[#f1f5f9]">{a.structure}</div>
-                        <div className="text-xs text-white/50">{a.type_inter}</div>
+                        <div className="font-semibold text-[#f1f5f9]">{a.nom}</div>
+                        <div className="text-xs text-white/50">{TYPE_INTER_LABEL[a.type_interlocuteur] ?? a.type_interlocuteur}</div>
                       </td>
                       <td className="px-4 py-3.5">
                         <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium ${ETAPE_STYLE[a.etape] ?? "bg-white/10 text-white/50"}`}>
-                          {a.etape}
+                          {ETAPE_LABEL[a.etape] ?? a.etape}
                         </span>
                       </td>
                       <td className="px-4 py-3.5 hidden sm:table-cell">
                         <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium ${TYPE_PROJET_STYLE[a.type_projet] ?? "bg-white/10 text-white/50"}`}>
-                          {a.type_projet}
+                          {TYPE_PROJET_LABEL[a.type_projet] ?? a.type_projet}
                         </span>
                       </td>
                       <td className="px-4 py-3.5 hidden md:table-cell text-white/50 text-xs">

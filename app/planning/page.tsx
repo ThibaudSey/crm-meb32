@@ -185,13 +185,13 @@ export default function PlanningPage() {
       const [rdvsRes, todosRes, affRes] = await Promise.all([
         supabase.from('rdvs').select('*').order('date_rdv', { ascending: true }),
         supabase.from('todos').select('*').order('date_limite', { ascending: true }),
-        supabase.from('affaires').select('structure').order('structure'),
+        supabase.from('affaires').select('nom').order('nom'),
       ])
       if (rdvsRes.error) throw rdvsRes.error
       if (todosRes.error) throw todosRes.error
       setRdvs(rdvsRes.data || [])
       setTodos(todosRes.data || [])
-      setAffairesList((affRes.data || []).map((a: { structure: string }) => a.structure))
+      setAffairesList((affRes.data || []).map((a: { nom: string }) => a.nom))
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Erreur inconnue')
     } finally {

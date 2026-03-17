@@ -38,14 +38,14 @@ function exportModuleCSV(key: string, data: TableRow[]) {
   const now = new Date().toISOString().slice(0, 7)
   if (key === "affaires") {
     exportToCSV(data.map(a => ({ ...a })), `affaires-${now}.csv`, [
-      { key: "structure",     label: "Nom affaire"    },
+      { key: "nom",            label: "Nom affaire"    },
       { key: "etape",         label: "Étape"          },
       { key: "type_projet",   label: "Type projet"    },
       { key: "espece",        label: "Espèce"         },
       { key: "nb_places",     label: "Nb places"      },
       { key: "montant_estime",label: "Montant €"      },
       { key: "marge",         label: "Marge %"        },
-      { key: "date_decision", label: "Date décision"  },
+      { key: "decision_prevue", label: "Date décision" },
     ])
   } else if (key === "devis") {
     exportToCSV(data.map(d => ({ ...d })), `devis-${now}.csv`, [
