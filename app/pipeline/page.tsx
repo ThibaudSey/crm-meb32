@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Plus, X, ArrowRight, AlertTriangle } from "lucide-react"
+import { Plus, X, ArrowRight, AlertTriangle, Loader2 } from "lucide-react"
 import Sidebar from "@/components/Sidebar"
 import TopBar from "@/components/TopBar"
 import LoadingSpinner from "@/components/LoadingSpinner"
@@ -141,6 +141,7 @@ function ModalNouvelleAffaire({
 }) {
   const [form, setForm] = useState(FORM_VIDE)
   const [submitting, setSubmitting] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
 
   function set(k: keyof typeof FORM_VIDE, v: string) {
     setForm((prev) => ({ ...prev, [k]: v }))
@@ -150,21 +151,27 @@ function ModalNouvelleAffaire({
     e.preventDefault()
     if (!form.structure || !form.montant_estime) return
     setSubmitting(true)
-    await onAjouter({
-      structure:      form.structure,
-      type_inter:     form.type_inter,
-      type_projet:    form.type_projet,
-      espece:         form.espece,
-      nb_places:      parseInt(form.nb_places) || 0,
-      montant_estime: parseInt(form.montant_estime) || 0,
-      marge:          0,
-      date_decision:  form.date_decision || "2026-12-31",
-      concurrent:     form.concurrent || null,
-      etape:          form.etape,
-      prochaine_action: null,
-    })
-    setSubmitting(false)
-    onClose()
+    setFormError(null)
+    try {
+      await onAjouter({
+        structure:        form.structure,
+        type_inter:       form.type_inter,
+        type_projet:      form.type_projet,
+        espece:           form.espece,
+        nb_places:        parseInt(form.nb_places) || 0,
+        montant_estime:   parseInt(form.montant_estime) || 0,
+        marge:            0,
+        date_decision:    form.date_decision || "2026-12-31",
+        concurrent:       form.concurrent || null,
+        etape:            form.etape,
+        prochaine_action: null,
+      })
+      onClose()
+    } catch (err: unknown) {
+      setFormError(err instanceof Error ? err.message : "Erreur lors de la création")
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -182,6 +189,11 @@ function ModalNouvelleAffaire({
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {formError && (
+            <div className="rounded-xl px-4 py-3 text-sm" style={{ background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.3)", color: "#fca5a5" }}>
+              {formError}
+            </div>
+          )}
           {/* Nom structure */}
           <div>
             <label className="block text-xs font-medium text-white/50 mb-1">
@@ -317,9 +329,9 @@ function ModalNouvelleAffaire({
             <button
               type="submit"
               disabled={submitting}
-              className="btn-primary rounded-xl flex-1 py-2.5 text-sm font-semibold disabled:opacity-60"
+              className="btn-primary rounded-xl flex-1 py-2.5 text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60"
             >
-              {submitting ? "Création…" : "Créer l'affaire"}
+              {submitting ? <><Loader2 size={14} className="animate-spin" /> Création…</> : "Créer l'affaire"}
             </button>
           </div>
         </form>
@@ -370,7 +382,8 @@ export default function PipelinePage() {
   async function ajouterAffaire(
     data: Omit<Affaire, "id" | "created_at" | "notes_concurrence" | "soncas">
   ) {
-    await supabase.from("affaires").insert([data])
+    const { error } = await supabase.from("affaires").insert([data])
+    if (error) throw error
     await fetchAffaires()
   }
 

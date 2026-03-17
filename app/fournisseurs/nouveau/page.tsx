@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Save } from "lucide-react"
+import { ArrowLeft, Save, Loader2 } from "lucide-react"
 import Sidebar from "@/components/Sidebar"
 import TopBar from "@/components/TopBar"
 import { supabase } from "@/lib/supabase"
@@ -52,44 +52,56 @@ export default function NouveauFournisseurPage() {
     delai_reponse: "48h", procedure: "",
   })
 
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
   function setF(k: string, v: string | number) { setForm(p => ({ ...p, [k]: v })) }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!form.nom) return
+    if (!form.nom) { setError("Le nom de la société est obligatoire"); return }
+    setSubmitting(true)
+    setError(null)
+    try {
+      const { data: four, error: insertError } = await supabase
+        .from("fournisseurs")
+        .insert({
+          nom: form.nom,
+          categorie: form.categorie,
+          site_web: form.site_web || null,
+          adresse: form.adresse || null,
+          statut: form.statut,
+          note_fiabilite: form.note,
+          commentaire: form.commentaire || null,
+          canal_devis_prefere: form.canal_devis,
+          email_devis: form.email_devis || null,
+          delai_reponse_habituel: form.delai_reponse || null,
+          procedure_speciale: form.procedure || null,
+          infos_obligatoires: [],
+        })
+        .select("id")
+        .single()
 
-    const { data: four } = await supabase
-      .from("fournisseurs")
-      .insert({
-        nom: form.nom,
-        categorie: form.categorie,
-        site_web: form.site_web || null,
-        adresse: form.adresse || null,
-        statut: form.statut,
-        note_fiabilite: form.note,
-        commentaire: form.commentaire || null,
-        canal_devis_prefere: form.canal_devis,
-        email_devis: form.email_devis || null,
-        delai_reponse_habituel: form.delai_reponse || null,
-        procedure_speciale: form.procedure || null,
-        infos_obligatoires: [],
-      })
-      .select("id")
-      .single()
+      if (insertError) throw insertError
 
-    if (four?.id && (form.contact_nom || form.contact_prenom)) {
-      await supabase.from("fournisseurs_contacts").insert({
-        fournisseur_id: four.id,
-        prenom: form.contact_prenom || null,
-        nom: form.contact_nom || null,
-        fonction: form.contact_fonction || null,
-        telephone: form.contact_tel || null,
-        email: form.contact_email || null,
-        est_principal: true,
-      })
+      if (four?.id && (form.contact_nom || form.contact_prenom)) {
+        await supabase.from("fournisseurs_contacts").insert({
+          fournisseur_id: four.id,
+          prenom: form.contact_prenom || null,
+          nom: form.contact_nom || null,
+          fonction: form.contact_fonction || null,
+          telephone: form.contact_tel || null,
+          email: form.contact_email || null,
+          est_principal: true,
+        })
+      }
+
+      router.push(four?.id ? `/fournisseurs/${four.id}` : "/fournisseurs")
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Erreur lors de la création du fournisseur")
+    } finally {
+      setSubmitting(false)
     }
-
-    router.push(four?.id ? `/fournisseurs/${four.id}` : "/fournisseurs")
   }
 
   return (
@@ -109,6 +121,11 @@ export default function NouveauFournisseurPage() {
           </button>
 
           <form onSubmit={handleSubmit} className="max-w-2xl space-y-5">
+            {error && (
+              <div className="rounded-xl px-4 py-3 text-sm" style={{ background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.3)", color: "#fca5a5" }}>
+                {error}
+              </div>
+            )}
 
             {/* Identité */}
             <div className="glass p-5 space-y-4">
@@ -231,8 +248,8 @@ export default function NouveauFournisseurPage() {
               <button type="button" onClick={() => router.push("/fournisseurs")} className="btn-secondary rounded-xl flex-1 py-3 text-sm font-medium">
                 Annuler
               </button>
-              <button type="submit" className="btn-primary rounded-xl flex-1 py-3 text-sm font-semibold flex items-center justify-center gap-2">
-                <Save size={15} /> Créer le fournisseur
+              <button type="submit" disabled={submitting} className="btn-primary rounded-xl flex-1 py-3 text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60">
+                {submitting ? <><Loader2 size={15} className="animate-spin" /> Création…</> : <><Save size={15} /> Créer le fournisseur</>}
               </button>
             </div>
           </form>

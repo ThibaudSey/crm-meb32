@@ -2,13 +2,13 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Plus, AlertTriangle, ChevronRight, Download } from "lucide-react"
+import { Plus, AlertTriangle, ChevronRight, Download, X, Loader2 } from "lucide-react"
 import Sidebar from "@/components/Sidebar"
 import TopBar from "@/components/TopBar"
 import LoadingSpinner from "@/components/LoadingSpinner"
 import ErrorMessage from "@/components/ErrorMessage"
 import { supabase } from "@/lib/supabase"
-import type { Devis } from "@/lib/types"
+import type { Devis, Affaire } from "@/lib/types"
 import { exportToCSV, fmtDateExport } from "@/lib/export"
 
 // ─── Types locaux ─────────────────────────────────────────────────────────────
@@ -36,13 +36,148 @@ const STATUT_STYLE: Record<Statut, { badge: string; label: string }> = {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
+// ─── Modal Nouveau Devis ──────────────────────────────────────────────────────
+
+const TYPE_PROJETS = ["Neuf", "Rénovation", "Extension", "Remplacement"]
+
+function ModalNouveauDevis({
+  affaires,
+  onClose,
+  onCreated,
+}: {
+  affaires: Pick<Affaire, "id" | "structure">[]
+  onClose: () => void
+  onCreated: () => void
+}) {
+  const [form, setForm] = useState({
+    client: "",
+    type_projet: "Neuf",
+    affaire_id: "",
+    concurrent: "",
+  })
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  function setF(k: keyof typeof form, v: string) {
+    setForm(p => ({ ...p, [k]: v }))
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!form.client) { setError("Le nom du client est obligatoire"); return }
+    setSubmitting(true)
+    setError(null)
+    try {
+      const year = new Date().getFullYear()
+      const ref = `DEV-${year}-${String(Date.now()).slice(-4)}`
+      const { error: insertError } = await supabase.from("devis").insert({
+        reference:   ref,
+        client:      form.client,
+        type_projet: form.type_projet,
+        affaire_id:  form.affaire_id || null,
+        concurrent:  form.concurrent || null,
+        total_ht:    0,
+        marge:       0,
+        statut:      "brouillon",
+        date_envoi:  null,
+      })
+      if (insertError) throw insertError
+      onCreated()
+      onClose()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Erreur lors de la création")
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal-box w-full max-w-md">
+        <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
+          <h2 className="font-semibold text-[#f1f5f9] text-base">Nouveau devis</h2>
+          <button onClick={onClose} className="p-1.5 rounded-lg" style={{ color: "rgba(255,255,255,0.5)" }}>
+            <X size={18} />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {error && (
+            <div className="rounded-xl px-4 py-3 text-sm" style={{ background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.3)", color: "#fca5a5" }}>
+              {error}
+            </div>
+          )}
+          <div>
+            <label className="block text-xs font-medium text-white/50 mb-1">
+              Client <span className="text-red-400">*</span>
+            </label>
+            <input
+              type="text" value={form.client}
+              onChange={e => setF("client", e.target.value)}
+              placeholder="EARL Morin…" required
+              className="input-glass w-full"
+              style={{ fontSize: "16px" }}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-white/50 mb-1">Type projet</label>
+              <select value={form.type_projet} onChange={e => setF("type_projet", e.target.value)} className="select-glass w-full">
+                {TYPE_PROJETS.map(t => <option key={t}>{t}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-white/50 mb-1">Concurrent</label>
+              <input
+                type="text" value={form.concurrent}
+                onChange={e => setF("concurrent", e.target.value)}
+                placeholder="Bâtivolaille…"
+                className="input-glass w-full"
+                style={{ fontSize: "16px" }}
+              />
+            </div>
+          </div>
+          {affaires.length > 0 && (
+            <div>
+              <label className="block text-xs font-medium text-white/50 mb-1">Affaire liée (optionnel)</label>
+              <select value={form.affaire_id} onChange={e => setF("affaire_id", e.target.value)} className="select-glass w-full">
+                <option value="">— Aucune affaire —</option>
+                {affaires.map(a => <option key={a.id} value={a.id}>{a.structure}</option>)}
+              </select>
+            </div>
+          )}
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose} className="btn-secondary rounded-xl flex-1 py-2.5 text-sm font-medium">
+              Annuler
+            </button>
+            <button
+              type="submit" disabled={submitting}
+              className="btn-primary rounded-xl flex-1 py-2.5 text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60"
+            >
+              {submitting ? <><Loader2 size={14} className="animate-spin" /> Création…</> : "Créer le devis"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
 export default function DevisPage() {
   const router = useRouter()
   const [devis, setDevis] = useState<Devis[]>([])
+  const [affaires, setAffaires] = useState<Pick<Affaire, "id" | "structure">[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [showNewDevis, setShowNewDevis] = useState(false)
 
-  useEffect(() => { fetchDevis() }, [])
+  useEffect(() => { fetchDevis(); fetchAffaires() }, [])
+
+  async function fetchAffaires() {
+    const { data } = await supabase.from("affaires").select("id, structure").order("structure")
+    setAffaires(data || [])
+  }
 
   async function fetchDevis() {
     try {
@@ -187,7 +322,10 @@ export default function DevisPage() {
                 {fmt(devisAvecJours.reduce((s, d) => s + d.total_ht, 0))} total HT
               </span>
             </p>
-            <button className="btn-primary rounded-xl flex items-center gap-2 text-sm font-semibold px-4 py-2.5">
+            <button
+              onClick={() => setShowNewDevis(true)}
+              className="btn-primary rounded-xl flex items-center gap-2 text-sm font-semibold px-4 py-2.5"
+            >
               <Plus size={16} />
               <span className="hidden sm:inline">Nouveau devis</span>
               <span className="sm:hidden">Nouveau</span>
@@ -320,6 +458,14 @@ export default function DevisPage() {
 
         </main>
       </div>
+
+      {showNewDevis && (
+        <ModalNouveauDevis
+          affaires={affaires}
+          onClose={() => setShowNewDevis(false)}
+          onCreated={fetchDevis}
+        />
+      )}
     </div>
   )
 }
