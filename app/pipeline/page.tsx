@@ -206,7 +206,9 @@ function ModalNouvelleAffaire({
       })
       onClose()
     } catch (err: unknown) {
-      setFormError(err instanceof Error ? err.message : "Erreur lors de la création")
+      const e = err as { message?: string; code?: string; details?: string; hint?: string }
+      console.error('Supabase error details:', err)
+      setFormError(`Erreur: ${e.message ?? "?"} | Code: ${e.code ?? "?"} | Details: ${e.details ?? "?"} | Hint: ${e.hint ?? "?"}`)
     } finally {
       setSubmitting(false)
     }
