@@ -198,7 +198,6 @@ function ModalNouvelleAffaire({
         espece:             form.espece,
         nb_places:          parseInt(form.nb_places) || 0,
         montant_estime:     parseInt(form.montant_estime) || 0,
-        marge:              0,
         decision_prevue:    form.date_decision || null,
         concurrent:         form.concurrent || null,
         etape:              ETAPE_MAP[form.etape] ?? "prospection",

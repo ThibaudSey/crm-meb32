@@ -411,16 +411,18 @@ export default function AffaireDetailPage() {
                     { label: "Espèce",         value: affaire.espece },
                     { label: "Nb de places",   value: affaire.nb_places.toLocaleString("fr-FR") },
                     { label: "Montant estimé", value: fmt(affaire.montant_estime), green: true },
-                    { label: "Marge estimée",  value: `${affaire.marge}%`, marge: true },
+                    { label: "Marge estimée",  value: affaire.montant_estime && affaire.cout_revient ? `${Math.round(((affaire.montant_estime - affaire.cout_revient) / affaire.montant_estime) * 100)}%` : "—", marge: true },
                     { label: "Date décision",  value: affaire.decision_prevue ? new Date(affaire.decision_prevue).toLocaleDateString("fr-FR") : "—" },
-                  ].map(({ label, value, green, marge }) => (
+                  ].map(({ label, value, green, marge }) => {
+                    const margeVal = affaire.montant_estime && affaire.cout_revient ? Math.round(((affaire.montant_estime - affaire.cout_revient) / affaire.montant_estime) * 100) : 0
+                    return (
                     <div key={label} style={{ background: "rgba(255,255,255,0.06)", borderRadius: "12px" }} className="px-3 py-2.5">
                       <p className="text-xs mb-0.5 text-white/40">{label}</p>
                       <p className="text-sm font-medium" style={{
-                        color: green ? "#10b981" : marge ? (affaire.marge >= 35 ? "#10b981" : "#f59e0b") : "#f1f5f9"
+                        color: green ? "#10b981" : marge ? (margeVal >= 35 ? "#10b981" : "#f59e0b") : "#f1f5f9"
                       }}>{value}</p>
                     </div>
-                  ))}
+                  )})}
                 </div>
               </div>
 

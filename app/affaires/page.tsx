@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Plus, Search, ChevronRight, Download } from "lucide-react"
+import { Plus, Search, ChevronRight, Download, X, Loader2 } from "lucide-react"
 import Sidebar from "@/components/Sidebar"
 import TopBar from "@/components/TopBar"
 import LoadingSpinner from "@/components/LoadingSpinner"
@@ -61,6 +61,144 @@ function fmt(n: number) {
   return new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 }).format(n) + " €"
 }
 
+function computeMarge(a: Affaire): number | null {
+  if (!a.montant_estime || !a.cout_revient) return null
+  return Math.round(((a.montant_estime - a.cout_revient) / a.montant_estime) * 100)
+}
+
+// ─── Mappings form → DB ───────────────────────────────────────────────────────
+
+const ETAPE_MAP: Record<string, string> = {
+  "Prospection": "prospection", "R1 Découverte": "r1",
+  "R2 Proposition": "r2", "Négociation": "negociation", "Signé": "signe",
+}
+const TYPE_INTER_MAP: Record<string, string> = {
+  "Éleveur": "eleveur", "Coopérative": "cooperative", "Intégrateur": "integrateur",
+}
+const TYPE_PROJET_MAP: Record<string, string> = {
+  "Neuf": "neuf", "Rénovation": "renovation", "Extension": "extension", "Remplacement": "remplacement",
+}
+const ETAPES_FORM = ["Prospection", "R1 Découverte", "R2 Proposition", "Négociation", "Signé"]
+const TYPES_INTER = ["Éleveur", "Coopérative", "Intégrateur"]
+const TYPES_PROJET = ["Neuf", "Rénovation", "Extension", "Remplacement"]
+const ESPECES = ["Poulet chair", "Poulet label/bio", "Dinde", "Canard", "Poule pondeuse"]
+
+const FORM_VIDE = {
+  structure: "", type_inter: "Éleveur", type_projet: "Neuf",
+  espece: "Poulet chair", nb_places: "", montant_estime: "",
+  date_decision: "", concurrent: "", etape: "Prospection",
+}
+
+// ─── Modal Nouvelle Affaire ───────────────────────────────────────────────────
+
+function ModalNouvelleAffaire({
+  onClose, onCreated,
+}: { onClose: () => void; onCreated: () => void }) {
+  const [form, setForm] = useState(FORM_VIDE)
+  const [submitting, setSubmitting] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
+
+  function setF(k: keyof typeof FORM_VIDE, v: string) { setForm(p => ({ ...p, [k]: v })) }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!form.structure || !form.montant_estime) { setFormError("Nom et montant obligatoires"); return }
+    setSubmitting(true); setFormError(null)
+    try {
+      const { error } = await supabase.from("affaires").insert([{
+        nom:               form.structure,
+        type_interlocuteur: TYPE_INTER_MAP[form.type_inter] ?? "eleveur",
+        type_projet:       TYPE_PROJET_MAP[form.type_projet] ?? "neuf",
+        espece:            form.espece,
+        nb_places:         parseInt(form.nb_places) || 0,
+        montant_estime:    parseInt(form.montant_estime) || 0,
+        decision_prevue:   form.date_decision || null,
+        concurrent:        form.concurrent || null,
+        etape:             ETAPE_MAP[form.etape] ?? "prospection",
+      }])
+      if (error) { console.error("Supabase error:", error); throw error }
+      onCreated(); onClose()
+    } catch (err: unknown) {
+      const e = err as { message?: string; code?: string; details?: string }
+      setFormError(`${e.message ?? "Erreur"} (code: ${e.code ?? "?"})`)
+    } finally { setSubmitting(false) }
+  }
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal-box w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
+          <h2 className="font-semibold text-[#f1f5f9] text-base">Nouvelle affaire</h2>
+          <button onClick={onClose} className="p-1.5 rounded-lg" style={{ color: "rgba(255,255,255,0.5)" }}><X size={18} /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {formError && (
+            <div className="rounded-xl px-4 py-3 text-sm" style={{ background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.3)", color: "#fca5a5" }}>
+              {formError}
+            </div>
+          )}
+          <div>
+            <label className="block text-xs font-medium text-white/50 mb-1">Nom de la structure <span className="text-red-400">*</span></label>
+            <input type="text" value={form.structure} onChange={e => setF("structure", e.target.value)} placeholder="EARL Morin…" required className="input-glass w-full" style={{ fontSize: "16px" }} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-white/50 mb-1">Type interlocuteur</label>
+              <select value={form.type_inter} onChange={e => setF("type_inter", e.target.value)} className="select-glass w-full">
+                {TYPES_INTER.map(v => <option key={v}>{v}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-white/50 mb-1">Type projet</label>
+              <select value={form.type_projet} onChange={e => setF("type_projet", e.target.value)} className="select-glass w-full">
+                {TYPES_PROJET.map(v => <option key={v}>{v}</option>)}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-white/50 mb-1">Espèce</label>
+            <select value={form.espece} onChange={e => setF("espece", e.target.value)} className="select-glass w-full">
+              {ESPECES.map(v => <option key={v}>{v}</option>)}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-white/50 mb-1">Nb places</label>
+              <input type="number" value={form.nb_places} onChange={e => setF("nb_places", e.target.value)} placeholder="22 000" min={0} className="input-glass w-full" style={{ fontSize: "16px" }} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-white/50 mb-1">Montant estimé (€) <span className="text-red-400">*</span></label>
+              <input type="number" value={form.montant_estime} onChange={e => setF("montant_estime", e.target.value)} placeholder="48 000" min={0} required className="input-glass w-full" style={{ fontSize: "16px" }} />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-white/50 mb-1">Date décision</label>
+              <input type="date" value={form.date_decision} onChange={e => setF("date_decision", e.target.value)} className="input-glass w-full" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-white/50 mb-1">Concurrent</label>
+              <input type="text" value={form.concurrent} onChange={e => setF("concurrent", e.target.value)} placeholder="Bâtivolaille…" className="input-glass w-full" style={{ fontSize: "16px" }} />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-white/50 mb-1">Étape initiale</label>
+            <select value={form.etape} onChange={e => setF("etape", e.target.value)} className="select-glass w-full">
+              {ETAPES_FORM.map(v => <option key={v}>{v}</option>)}
+            </select>
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose} className="btn-secondary rounded-xl flex-1 py-2.5 text-sm font-medium">Annuler</button>
+            <button type="submit" disabled={submitting} className="btn-primary rounded-xl flex-1 py-2.5 text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60">
+              {submitting ? <><Loader2 size={14} className="animate-spin" /> Création…</> : "Créer l'affaire"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function AffairesPage() {
@@ -71,6 +209,7 @@ export default function AffairesPage() {
   const [filtreEtape, setFiltreEtape] = useState<string>("Toutes")
   const [recherche, setRecherche]     = useState("")
   const [navigueVers, setNavigueVers] = useState("")
+  const [showModal, setShowModal]     = useState(false)
 
   useEffect(() => { fetchAffaires() }, [])
 
@@ -113,7 +252,7 @@ export default function AffairesPage() {
         espece:       a.espece,
         nbPlaces:     a.nb_places,
         montant:      a.montant_estime,
-        marge:        a.marge,
+        marge:        computeMarge(a) ?? "",
         etape:        ETAPE_LABEL[a.etape] ?? a.etape,
         concurrent:   a.concurrent ?? "",
         dateDecision: fmtDateExport(a.decision_prevue ?? ""),
@@ -200,7 +339,7 @@ export default function AffairesPage() {
                 style={{ caretColor: "#a5b4fc" }}
               />
             </div>
-            <button className="btn-primary rounded-xl flex items-center gap-1.5 text-sm font-semibold px-3 py-2.5 shrink-0">
+            <button onClick={() => setShowModal(true)} className="btn-primary rounded-xl flex items-center gap-1.5 text-sm font-semibold px-3 py-2.5 shrink-0">
               <Plus size={16} />
             </button>
           </div>
@@ -265,7 +404,7 @@ export default function AffairesPage() {
             </div>
 
             {/* Bouton créer */}
-            <button className="btn-primary rounded-xl ml-auto flex items-center gap-2 text-sm font-semibold px-4 py-2.5">
+            <button onClick={() => setShowModal(true)} className="btn-primary rounded-xl ml-auto flex items-center gap-2 text-sm font-semibold px-4 py-2.5">
               <Plus size={16} />
               Nouvelle affaire
             </button>
@@ -308,11 +447,13 @@ export default function AffairesPage() {
                   <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium ${TYPE_PROJET_STYLE[a.type_projet] ?? "bg-white/10 text-white/50"}`}>
                     {TYPE_PROJET_LABEL[a.type_projet] ?? a.type_projet}
                   </span>
-                  <span className="text-xs ml-auto font-semibold" style={{
-                    color: a.marge >= 35 ? "#10b981" : a.marge >= 30 ? "#f59e0b" : "#ef4444"
-                  }}>
-                    {a.marge}%
-                  </span>
+                  {computeMarge(a) !== null && (
+                    <span className="text-xs ml-auto font-semibold" style={{
+                      color: computeMarge(a)! >= 35 ? "#10b981" : computeMarge(a)! >= 30 ? "#f59e0b" : "#ef4444"
+                    }}>
+                      {computeMarge(a)}%
+                    </span>
+                  )}
                 </div>
                 <p className="text-xs mt-2 pt-2" style={{ color: "rgba(255,255,255,0.4)", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
                   → {a.prochaine_action ?? "—"}
@@ -366,14 +507,13 @@ export default function AffairesPage() {
                         {fmt(a.montant_estime ?? 0)}
                       </td>
                       <td className="px-4 py-3.5 text-right hidden lg:table-cell">
-                        <span
-                          className="font-semibold"
-                          style={{
-                            color: a.marge >= 35 ? "#10b981" : a.marge >= 30 ? "#f59e0b" : "#ef4444",
-                          }}
-                        >
-                          {a.marge}%
-                        </span>
+                        {computeMarge(a) !== null ? (
+                          <span className="font-semibold" style={{
+                            color: computeMarge(a)! >= 35 ? "#10b981" : computeMarge(a)! >= 30 ? "#f59e0b" : "#ef4444",
+                          }}>
+                            {computeMarge(a)}%
+                          </span>
+                        ) : <span className="text-white/20">—</span>}
                       </td>
                       <td className="px-4 py-3.5 text-xs text-white/50 hidden xl:table-cell max-w-[200px]">
                         {a.prochaine_action ?? "—"}
@@ -401,6 +541,18 @@ export default function AffairesPage() {
 
         </main>
       </div>
+
+      {/* FAB mobile */}
+      <button onClick={() => setShowModal(true)} className="fab md:hidden" aria-label="Nouvelle affaire">
+        <Plus size={24} />
+      </button>
+
+      {showModal && (
+        <ModalNouvelleAffaire
+          onClose={() => setShowModal(false)}
+          onCreated={fetchAffaires}
+        />
+      )}
     </div>
   )
 }

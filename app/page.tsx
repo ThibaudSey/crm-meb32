@@ -157,8 +157,9 @@ export default function DashboardPage() {
   const caSigne          = useMemo(() => affairesSignees.reduce((s, a) => s + (a.montant_estime ?? 0), 0), [affairesSignees])
   const pipelineTotal    = useMemo(() => affairesActives.reduce((s, a) => s + (a.montant_estime ?? 0), 0), [affairesActives])
   const margeMoyenne     = useMemo(() => {
-    if (affairesSignees.length === 0) return 0
-    return affairesSignees.reduce((s, a) => s + (a.marge ?? 0), 0) / affairesSignees.length
+    const avecMarge = affairesSignees.filter(a => a.montant_estime && a.cout_revient)
+    if (avecMarge.length === 0) return 0
+    return avecMarge.reduce((s, a) => s + Math.round(((a.montant_estime - (a.cout_revient ?? 0)) / a.montant_estime) * 100), 0) / avecMarge.length
   }, [affairesSignees])
 
   const devisEnAttente = useMemo(() => devis.map(d => ({

@@ -22,7 +22,7 @@ export interface Affaire {
   espece: string
   nb_places: number
   montant_estime: number
-  marge: number
+  cout_revient: number | null
   decision_prevue: string | null
   concurrent: string | null
   etape: string
