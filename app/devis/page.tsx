@@ -64,22 +64,15 @@ function ModalNouveauDevis({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!form.client) { setError("Le nom du client est obligatoire"); return }
     setSubmitting(true)
     setError(null)
     try {
       const year = new Date().getFullYear()
       const ref = `DEV-${year}-${String(Date.now()).slice(-4)}`
       const { error: insertError } = await supabase.from("devis").insert({
-        reference:   ref,
-        client:      form.client,
-        type_projet: form.type_projet,
+        "référence": ref,
         affaire_id:  form.affaire_id || null,
-        concurrent:  form.concurrent || null,
-        total_ht:    0,
-        marge:       0,
         statut:      "brouillon",
-        date_envoi:  null,
       })
       if (insertError) throw insertError
       onCreated()
@@ -175,7 +168,7 @@ export default function DevisPage() {
   useEffect(() => { fetchDevis(); fetchAffaires() }, [])
 
   async function fetchAffaires() {
-    const { data } = await supabase.from("affaires").select("id, nom").order("nom")
+    const { data } = await supabase.from("entreprises").select("id, nom").order("nom")
     setAffaires(data || [])
   }
 
@@ -209,19 +202,12 @@ export default function DevisPage() {
     const today = Date.now()
     exportToCSV(
       devis.map((d) => {
-        const margeEur    = Math.round(d.total_ht * d.marge / 100)
-        const coutRevient = d.total_ht - margeEur
         const jours = d.date_envoi
           ? Math.floor((today - new Date(d.date_envoi).getTime()) / 86400000)
           : null
         return {
-          ref:          d.reference,
-          client:       d.client,
-          typeProjet:   d.type_projet,
+          ref:          d["référence"],
           totalHT:      d.total_ht,
-          coutRevient,
-          margeEur,
-          margePct:     d.marge,
           statut:       d.statut,
           dateCreation: "",
           dateEnvoi:    fmtDateExport(d.date_envoi),
@@ -231,12 +217,7 @@ export default function DevisPage() {
       `devis-MEB32-${new Date().toISOString().slice(0, 7)}.csv`,
       [
         { key: "ref",          label: "Référence"           },
-        { key: "client",       label: "Client"              },
-        { key: "typeProjet",   label: "Type projet"         },
         { key: "totalHT",      label: "Total HT €"          },
-        { key: "coutRevient",  label: "Coût revient €"      },
-        { key: "margeEur",     label: "Marge €"             },
-        { key: "margePct",     label: "Marge %"             },
         { key: "statut",       label: "Statut"              },
         { key: "dateCreation", label: "Date création"       },
         { key: "dateEnvoi",    label: "Date envoi"          },
@@ -304,9 +285,9 @@ export default function DevisPage() {
                       onClick={() => router.push(`/devis/${d.id}`)}
                       className="font-semibold underline underline-offset-2 hover:opacity-80 transition-opacity"
                     >
-                      {d.reference}
+                      {d["référence"]}
                     </button>{" "}
-                    ({d.client}, J+{d.jours})
+                    (J+{d.jours})
                     {i < devisARelancer.length - 1 ? ", " : ""}
                   </span>
                 ))}
@@ -346,8 +327,7 @@ export default function DevisPage() {
                 >
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div>
-                      <p className="font-bold text-sm" style={{ color: "#f1f5f9" }}>{d.client}</p>
-                      <p className="text-xs font-mono mt-0.5" style={{ color: "rgba(255,255,255,0.4)" }}>{d.reference}</p>
+                      <p className="font-mono text-xs font-semibold mt-0.5" style={{ color: "rgba(255,255,255,0.4)" }}>{d["référence"]}</p>
                     </div>
                     <span className="text-base font-bold whitespace-nowrap" style={{ color: "#10b981" }}>
                       {fmt(d.total_ht)}
@@ -356,12 +336,6 @@ export default function DevisPage() {
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium ${STATUT_STYLE[statutKey]?.badge ?? "bg-white/10 text-white/50"}`}>
                       {STATUT_STYLE[statutKey]?.label ?? d.statut}
-                    </span>
-                    <span className="text-xs" style={{ color: "rgba(255,255,255,0.45)" }}>{d.type_projet}</span>
-                    <span className="text-xs font-semibold ml-auto" style={{
-                      color: d.marge >= 32 ? "#10b981" : d.marge >= 25 ? "#f59e0b" : "#ef4444"
-                    }}>
-                      Marge {d.marge}%
                     </span>
                   </div>
                   {relance && (
@@ -403,19 +377,15 @@ export default function DevisPage() {
                         style={relance ? { background: "rgba(249,115,22,0.05)" } : undefined}
                       >
                         <td className="px-5 py-3.5">
-                          <span className="font-mono text-xs font-semibold" style={{ color: "#f1f5f9" }}>{d.reference}</span>
+                          <span className="font-mono text-xs font-semibold" style={{ color: "#f1f5f9" }}>{d["référence"]}</span>
                         </td>
-                        <td className="px-4 py-3.5 font-medium" style={{ color: "#f1f5f9" }}>{d.client}</td>
-                        <td className="px-4 py-3.5 hidden sm:table-cell text-xs" style={{ color: "rgba(255,255,255,0.5)" }}>{d.type_projet}</td>
+                        <td className="px-4 py-3.5 font-medium text-white/50" style={{ color: "#f1f5f9" }}>—</td>
+                        <td className="px-4 py-3.5 hidden sm:table-cell text-xs" style={{ color: "rgba(255,255,255,0.5)" }}>—</td>
                         <td className="px-4 py-3.5 text-right font-bold whitespace-nowrap" style={{ color: "#10b981" }}>
                           {fmt(d.total_ht)}
                         </td>
                         <td className="px-4 py-3.5 text-right hidden md:table-cell">
-                          <span className="font-semibold" style={{
-                            color: d.marge >= 32 ? "#10b981" : d.marge >= 25 ? "#f59e0b" : "#ef4444"
-                          }}>
-                            {d.marge}%
-                          </span>
+                          <span className="text-white/30">—</span>
                         </td>
                         <td className="px-4 py-3.5">
                           <div className="flex items-center gap-1.5">

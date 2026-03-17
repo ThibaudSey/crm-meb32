@@ -139,8 +139,8 @@ export default function DashboardPage() {
   useEffect(() => {
     async function load() {
       const [{ data: aff }, { data: td }, { data: dv }] = await Promise.all([
-        supabase.from("affaires").select("*").order("created_at", { ascending: false }),
-        supabase.from("todos").select("*").order("date_limite", { ascending: true }).limit(20),
+        supabase.from("entreprises").select("*").order("created_at", { ascending: false }),
+        supabase.from("tous").select("*").order("limite_de_date", { ascending: true }).limit(20),
         supabase.from("devis").select("*").eq("statut", "envoye"),
       ])
       setAffaires(aff ?? [])
@@ -163,7 +163,7 @@ export default function DashboardPage() {
   }, [affairesSignees])
 
   const devisEnAttente = useMemo(() => devis.map(d => ({
-    client: d.client,
+    ref: d["référence"] ?? "—",
     jours: d.date_envoi
       ? Math.floor((Date.now() - new Date(d.date_envoi).getTime()) / 86400000)
       : 0,
@@ -181,7 +181,7 @@ export default function DashboardPage() {
   const dernieresAffaires = affaires.slice(0, 5)
 
   async function toggleTodo(id: string, fait: boolean) {
-    await supabase.from("todos").update({ fait: !fait }).eq("id", id)
+    await supabase.from("tous").update({ fait: !fait }).eq("id", id)
     setTodos(p => p.map(t => t.id === id ? { ...t, fait: !fait } : t))
   }
 
@@ -211,8 +211,8 @@ export default function DashboardPage() {
               <div className="text-sm">
                 <span className="font-semibold">Devis sans retour :</span>{" "}
                 {devisEnAttente.slice(0, 3).map((d, i) => (
-                  <span key={d.client}>
-                    {d.client} <span className="font-bold">({d.jours}j)</span>
+                  <span key={d.ref}>
+                    {d.ref} <span className="font-bold">({d.jours}j)</span>
                     {i < Math.min(devisEnAttente.length, 3) - 1 ? ", " : ""}
                   </span>
                 ))}

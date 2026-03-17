@@ -105,16 +105,15 @@ function ModalNouvelleAffaire({
     if (!form.structure || !form.montant_estime) { setFormError("Nom et montant obligatoires"); return }
     setSubmitting(true); setFormError(null)
     try {
-      const { error } = await supabase.from("affaires").insert([{
-        nom:               form.structure,
-        type_interlocuteur: TYPE_INTER_MAP[form.type_inter] ?? "eleveur",
-        type_projet:       TYPE_PROJET_MAP[form.type_projet] ?? "neuf",
-        espece:            form.espece,
-        nb_places:         parseInt(form.nb_places) || 0,
-        montant_estime:    parseInt(form.montant_estime) || 0,
-        decision_prevue:   form.date_decision || null,
-        concurrent:        form.concurrent || null,
-        etape:             ETAPE_MAP[form.etape] ?? "prospection",
+      const { error } = await supabase.from("entreprises").insert([{
+        nom:             form.structure,
+        type_projet:     TYPE_PROJET_MAP[form.type_projet] ?? "neuf",
+        espece:          form.espece,
+        nb_places:       parseInt(form.nb_places) || 0,
+        montant_estime:  parseInt(form.montant_estime) || 0,
+        decision_prevue: form.date_decision || null,
+        concurrent:      form.concurrent || null,
+        etape:           ETAPE_MAP[form.etape] ?? "prospection",
       }])
       if (error) { console.error("Supabase error:", error); throw error }
       onCreated(); onClose()
@@ -218,7 +217,7 @@ export default function AffairesPage() {
       setLoading(true)
       setError(null)
       const { data, error } = await supabase
-        .from("affaires")
+        .from("entreprises")
         .select("*")
         .order("created_at", { ascending: false })
       if (error) throw error
@@ -247,7 +246,7 @@ export default function AffairesPage() {
     exportToCSV(
       affaires.map((a) => ({
         structure:    a.nom,
-        typeInter:    TYPE_INTER_LABEL[a.type_interlocuteur] ?? a.type_interlocuteur,
+        typeInter:    "",
         typeProjet:   TYPE_PROJET_LABEL[a.type_projet] ?? a.type_projet,
         espece:       a.espece,
         nbPlaces:     a.nb_places,
@@ -257,7 +256,7 @@ export default function AffairesPage() {
         concurrent:   a.concurrent ?? "",
         dateDecision: fmtDateExport(a.decision_prevue ?? ""),
         probabilite:  "",
-        soncas:       a.soncas ?? "",
+        soncas:       a.soncas_dominant ?? "",
       })),
       `affaires-MEB32-${new Date().toISOString().slice(0, 7)}.csv`,
       [
@@ -434,7 +433,7 @@ export default function AffairesPage() {
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <div>
                     <p className="font-bold text-sm" style={{ color: "#f1f5f9" }}>{a.nom}</p>
-                    <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.4)" }}>{TYPE_INTER_LABEL[a.type_interlocuteur] ?? a.type_interlocuteur}</p>
+                    <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.4)" }}>{TYPE_PROJET_LABEL[a.type_projet] ?? a.type_projet}</p>
                   </div>
                   <span className="text-base font-bold whitespace-nowrap" style={{ color: "#10b981" }}>
                     {fmt(a.montant_estime ?? 0)}
@@ -456,7 +455,7 @@ export default function AffairesPage() {
                   )}
                 </div>
                 <p className="text-xs mt-2 pt-2" style={{ color: "rgba(255,255,255,0.4)", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-                  → {a.prochaine_action ?? "—"}
+                  → {a.concurrent ?? "—"}
                 </p>
               </div>
             ))}
@@ -487,7 +486,7 @@ export default function AffairesPage() {
                     >
                       <td className="px-5 py-3.5">
                         <div className="font-semibold text-[#f1f5f9]">{a.nom}</div>
-                        <div className="text-xs text-white/50">{TYPE_INTER_LABEL[a.type_interlocuteur] ?? a.type_interlocuteur}</div>
+                        <div className="text-xs text-white/50">{TYPE_PROJET_LABEL[a.type_projet] ?? a.type_projet}</div>
                       </td>
                       <td className="px-4 py-3.5">
                         <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium ${ETAPE_STYLE[a.etape] ?? "bg-white/10 text-white/50"}`}>
@@ -516,7 +515,7 @@ export default function AffairesPage() {
                         ) : <span className="text-white/20">—</span>}
                       </td>
                       <td className="px-4 py-3.5 text-xs text-white/50 hidden xl:table-cell max-w-[200px]">
-                        {a.prochaine_action ?? "—"}
+                        {a.concurrent ?? "—"}
                       </td>
                       <td className="px-4 py-3.5 text-right">
                         <ChevronRight

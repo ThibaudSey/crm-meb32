@@ -162,7 +162,7 @@ export default function FicheFournisseurPage() {
           supabase.from("fournisseurs_contacts").select("*").eq("fournisseur_id", id),
           supabase.from("fournisseurs_produits").select("*").eq("fournisseur_id", id),
           supabase.from("demandes_devis_fournisseur").select("*").eq("fournisseur_id", id).order("created_at", { ascending: false }),
-          supabase.from("affaires").select("id, nom, type_projet, espece, nb_places").order("nom"),
+          supabase.from("entreprises").select("id, nom, type_projet, espece, nb_places").order("nom"),
         ])
 
         if (fErr || !fournisseur) {

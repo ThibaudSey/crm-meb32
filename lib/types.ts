@@ -16,19 +16,19 @@ export type TodoCat = "Relance" | "Admin" | "Technique" | "Urgence"
 export interface Affaire {
   id: string
   created_at: string
+  prospect_id: string | null
   nom: string
-  type_interlocuteur: string
   type_projet: string
   espece: string
   nb_places: number
   montant_estime: number
   cout_revient: number | null
-  decision_prevue: string | null
-  concurrent: string | null
   etape: string
-  prochaine_action: string | null
+  decision_prevue: string | null
+  probabilite: number | null
+  concurrent: string | null
   notes_concurrence: string | null
-  soncas: string | null
+  soncas_dominant: string | null
 }
 
 // ─── Parties prenantes ────────────────────────────────────────────────────────
@@ -47,8 +47,7 @@ export interface HistoriqueNote {
   id: string
   affaire_id: string
   created_at: string
-  type: string
-  date: string
+  taper: string
   contenu: string
 }
 
@@ -58,7 +57,7 @@ export interface Todo {
   id: string
   created_at: string
   texte: string
-  date_limite: string
+  limite_de_date: string
   fait: boolean
   urgent: boolean
   categorie: string
@@ -70,24 +69,22 @@ export interface Todo {
 export interface Devis {
   id: string
   created_at: string
-  reference: string
-  client: string
+  "référence": string
   affaire_id: string | null
-  type_projet: string
   total_ht: number
-  marge: number
+  cout_revient_total: number | null
   statut: Statut
   date_envoi: string | null
-  concurrent: string | null
+  notes: string | null
 }
 
 export interface DevisLigne {
   id: string
   devis_id: string
-  designation: string
-  qty: number
+  "désignation": string
+  quantite: number
   prix_unitaire: number
-  remise: number
+  remise_pct: number
   prix_revient: number
   ordre: number
 }
@@ -98,13 +95,13 @@ export interface RDV {
   id: string
   created_at: string
   titre: string
-  affaire: string
+  affaire_id: string | null
+  prospect_id: string | null
   type_rdv: string
   date_rdv: string
-  heure: string
-  duree: string
+  duree_min: number | null
   lieu: string
-  notes: string | null
+  notes_prep: string | null
   fait: boolean
 }
 
@@ -126,9 +123,9 @@ export interface FraisEntry {
 export interface KmEntry {
   id: string
   created_at: string
-  date: string
-  depart: string
-  arrivee: string
+  date_trajet: string
+  partir: string
+  arriver: string
   km: number
   aller_retour: boolean
   motif: string
@@ -136,7 +133,9 @@ export interface KmEntry {
   vehicule: string
   puissance_fiscale: number
   taux_ik: number
-  indemnite: number
+  indemniser: number
+  mois: number | null
+  annee: number | null
 }
 
 export interface Vehicule {
@@ -144,8 +143,8 @@ export interface Vehicule {
   nom: string
   immatriculation: string
   puissance_fiscale: number
-  type_vehicule: string
-  est_defaut: boolean
+  "type_véhicule": string
+  est_default: boolean
 }
 
 // ─── Fournisseurs ─────────────────────────────────────────────────────────────

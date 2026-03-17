@@ -54,7 +54,8 @@ function fmt(n: number) {
   return new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 }).format(n) + " €"
 }
 
-function isDepasse(date: string) {
+function isDepasse(date: string | undefined | null) {
+  if (!date) return false
   return new Date(date) < new Date()
 }
 
@@ -76,7 +77,7 @@ const TYPE_INTER_LABEL: Record<string, string> = {
 function buildPrompts(a: Affaire, soncasActifs: string[]) {
   const soncas = soncasActifs.length ? soncasActifs.join(", ") : "non renseigné"
   const typeProjetLabel = TYPE_PROJET_LABEL[a.type_projet] ?? a.type_projet
-  const typeInterLabel  = TYPE_INTER_LABEL[a.type_interlocuteur] ?? a.type_interlocuteur
+  const typeInterLabel  = typeProjetLabel
   return {
     r1: `Tu es un commercial spécialisé en équipement d'élevage avicole.
 Je prépare ma première visite (R1 Découverte) chez ${a.nom}.
@@ -162,10 +163,10 @@ export default function AffaireDetailPage() {
     setError(null)
     try {
       const [affaireRes, prenantesRes, todosRes, notesRes] = await Promise.all([
-        supabase.from("affaires").select("*").eq("id", id).single(),
+        supabase.from("entreprises").select("*").eq("id", id).single(),
         supabase.from("parties_prenantes").select("*").eq("affaire_id", id),
-        supabase.from("todos").select("*").eq("affaire_id", id).order("date_limite"),
-        supabase.from("historique_notes").select("*").eq("affaire_id", id).order("date", { ascending: false }),
+        supabase.from("tous").select("*").eq("affaire_id", id).order("limite_de_date"),
+        supabase.from("notes historiques").select("*").eq("affaire_id", id).order("created_at", { ascending: false }),
       ])
 
       if (affaireRes.error || !affaireRes.data) {
@@ -178,8 +179,8 @@ export default function AffaireDetailPage() {
       setNotesConcurrence(a.notes_concurrence ?? "")
       setConcurrentValue(a.concurrent ?? "")
       // Initialise SONCAS from DB value (comma-separated string)
-      if (a.soncas) {
-        setSoncasActifs(a.soncas.split(",").map((s) => s.trim()).filter(Boolean))
+      if (a.soncas_dominant) {
+        setSoncasActifs(a.soncas_dominant.split(",").map((s) => s.trim()).filter(Boolean))
       }
 
       setPrenantes((prenantesRes.data ?? []) as PartiePrenante[])
@@ -206,7 +207,7 @@ export default function AffaireDetailPage() {
 
   async function toggleTodo(todoId: string, fait: boolean) {
     const { error } = await supabase
-      .from("todos")
+      .from("tous")
       .update({ fait: !fait })
       .eq("id", todoId)
     if (!error) {
@@ -215,7 +216,7 @@ export default function AffaireDetailPage() {
   }
 
   async function supprimerTodo(todoId: string) {
-    const { error } = await supabase.from("todos").delete().eq("id", todoId)
+    const { error } = await supabase.from("tous").delete().eq("id", todoId)
     if (!error) {
       setTodos((prev) => prev.filter((t) => t.id !== todoId))
     }
@@ -226,12 +227,12 @@ export default function AffaireDetailPage() {
     const payload = {
       affaire_id: affaire.id,
       texte: newTodoTexte,
-      date_limite: newTodoDate || "2026-12-31",
+      limite_de_date: newTodoDate || "2026-12-31",
       fait: false,
       categorie: newTodoUrgent ? "Urgence" : "Admin",
       urgent: newTodoUrgent,
     }
-    const { data, error } = await supabase.from("todos").insert(payload).select().single()
+    const { data, error } = await supabase.from("tous").insert(payload).select().single()
     if (!error && data) {
       setTodos((prev) => [data as Todo, ...prev])
     }
@@ -243,11 +244,10 @@ export default function AffaireDetailPage() {
     if (!newNoteContenu || !affaire) return
     const payload = {
       affaire_id: affaire.id,
-      type: newNoteType,
-      date: newNoteDate,
+      taper: newNoteType,
       contenu: newNoteContenu,
     }
-    const { data, error } = await supabase.from("historique_notes").insert(payload).select().single()
+    const { data, error } = await supabase.from("notes historiques").insert(payload).select().single()
     if (!error && data) {
       setNotes((prev) => [data as HistoriqueNote, ...prev])
     }
@@ -257,7 +257,7 @@ export default function AffaireDetailPage() {
   }
 
   async function supprimerNote(noteId: string) {
-    const { error } = await supabase.from("historique_notes").delete().eq("id", noteId)
+    const { error } = await supabase.from("notes historiques").delete().eq("id", noteId)
     if (!error) {
       setNotes((prev) => prev.filter((n) => n.id !== noteId))
     }
@@ -289,15 +289,15 @@ export default function AffaireDetailPage() {
   async function sauvegarderAffaire() {
     if (!affaire) return
     const { error } = await supabase
-      .from("affaires")
+      .from("entreprises")
       .update({
         concurrent: concurrentValue,
         notes_concurrence: notesConcurrence,
-        soncas: soncasActifs.join(", "),
+        soncas_dominant: soncasActifs.join(", "),
       })
       .eq("id", affaire.id)
     if (!error) {
-      setAffaire((prev) => prev ? { ...prev, concurrent: concurrentValue, notes_concurrence: notesConcurrence, soncas: soncasActifs.join(", ") } : prev)
+      setAffaire((prev) => prev ? { ...prev, concurrent: concurrentValue, notes_concurrence: notesConcurrence, soncas_dominant: soncasActifs.join(", ") } : prev)
       setEditMode(false)
     }
   }
@@ -378,7 +378,7 @@ export default function AffaireDetailPage() {
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <h2 className="text-xl font-bold" style={{ color: "#f1f5f9" }}>{affaire.nom}</h2>
-                    <p className="text-sm mt-0.5" style={{ color: "rgba(255,255,255,0.5)" }}>{TYPE_INTER_LABEL[affaire.type_interlocuteur] ?? affaire.type_interlocuteur}</p>
+                    <p className="text-sm mt-0.5" style={{ color: "rgba(255,255,255,0.5)" }}>{TYPE_PROJET_LABEL[affaire.type_projet] ?? affaire.type_projet}</p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <span className="px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-amber-500/20 border border-amber-500/40 text-amber-300">
@@ -619,7 +619,7 @@ export default function AffaireDetailPage() {
 
                 <ul className="p-4 space-y-1">
                   {todos.map((todo) => {
-                    const depasse = !todo.fait && isDepasse(todo.date_limite)
+                    const depasse = !todo.fait && isDepasse(todo.limite_de_date)
                     return (
                       <li
                         key={todo.id}
@@ -645,7 +645,7 @@ export default function AffaireDetailPage() {
                           <div className="flex items-center gap-2 mt-0.5">
                             <span className="text-xs" style={{ color: depasse ? "#ef4444" : "rgba(255,255,255,0.35)", fontWeight: depasse ? 600 : 400 }}>
                               {depasse && <AlertCircle size={10} className="inline mr-0.5" />}
-                              {new Date(todo.date_limite).toLocaleDateString("fr-FR")}
+                              {todo.limite_de_date ? new Date(todo.limite_de_date).toLocaleDateString("fr-FR") : "—"}
                             </span>
                             <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${TODO_CAT_STYLE[todo.categorie] ?? TODO_CAT_STYLE["Admin"]}`}>
                               {todo.categorie}
@@ -700,7 +700,7 @@ export default function AffaireDetailPage() {
                 {/* Timeline */}
                 <div className="p-5 space-y-0">
                   {notes.map((note, i) => {
-                    const noteStyle = NOTE_TYPE_STYLE[note.type] ?? NOTE_TYPE_STYLE["Appel"]
+                    const noteStyle = NOTE_TYPE_STYLE[note.taper] ?? NOTE_TYPE_STYLE["Appel"]
                     const { dot, badge } = noteStyle
                     const isLast = i === notes.length - 1
                     return (
@@ -712,9 +712,9 @@ export default function AffaireDetailPage() {
 
                         <div className={`flex-1 ${!isLast ? "pb-5" : ""}`}>
                           <div className="flex items-center gap-2 mb-1">
-                            <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${badge}`}>{note.type}</span>
+                            <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${badge}`}>{note.taper}</span>
                             <span className="text-xs" style={{ color: "rgba(255,255,255,0.35)" }}>
-                              {new Date(note.date).toLocaleDateString("fr-FR")}
+                              {new Date(note.created_at).toLocaleDateString("fr-FR")}
                             </span>
                             <button
                               onClick={() => supprimerNote(note.id)}
@@ -727,7 +727,7 @@ export default function AffaireDetailPage() {
                           <button
                             onClick={() => ouvrirPrompt(
                               "Structurer cette note avec Claude",
-                              `Tu es un assistant CRM commercial avicole.\n\nVoici une note brute prise lors d'un ${note.type.toLowerCase()} avec ${affaire.nom} le ${new Date(note.date).toLocaleDateString("fr-FR")} :\n\n"${note.contenu}"\n\nStructure cette note en :\n1. Résumé en 2 phrases\n2. Points clés identifiés (besoins, objections, opportunités)\n3. Actions recommandées suite à ce ${note.type.toLowerCase()}\n4. Signaux d'achat détectés`
+                              `Tu es un assistant CRM commercial avicole.\n\nVoici une note brute prise lors d'un ${note.taper.toLowerCase()} avec ${affaire.nom} le ${new Date(note.created_at).toLocaleDateString("fr-FR")} :\n\n"${note.contenu}"\n\nStructure cette note en :\n1. Résumé en 2 phrases\n2. Points clés identifiés (besoins, objections, opportunités)\n3. Actions recommandées suite à ce ${note.taper.toLowerCase()}\n4. Signaux d'achat détectés`
                             )}
                             className="mt-1.5 text-xs flex items-center gap-1 transition-colors"
                             style={{ color: "rgba(255,255,255,0.35)" }}

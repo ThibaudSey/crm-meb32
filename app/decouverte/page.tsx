@@ -170,7 +170,7 @@ export default function DecouvertePage() {
 
   useEffect(() => {
     supabase
-      .from("affaires")
+      .from("entreprises")
       .select("id, nom, type_projet, espece, nb_places")
       .order("nom")
       .then(({ data }) => {

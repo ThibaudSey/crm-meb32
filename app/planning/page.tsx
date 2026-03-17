@@ -184,8 +184,8 @@ export default function PlanningPage() {
     try {
       const [rdvsRes, todosRes, affRes] = await Promise.all([
         supabase.from('rdvs').select('*').order('date_rdv', { ascending: true }),
-        supabase.from('todos').select('*').order('date_limite', { ascending: true }),
-        supabase.from('affaires').select('nom').order('nom'),
+        supabase.from('tous').select('*').order('limite_de_date', { ascending: true }),
+        supabase.from('entreprises').select('nom').order('nom'),
       ])
       if (rdvsRes.error) throw rdvsRes.error
       if (todosRes.error) throw todosRes.error
@@ -218,7 +218,7 @@ export default function PlanningPage() {
 
   function rdvsForDay(day: Date) {
     const ds = dateStr(day)
-    return rdvs.filter((r) => r.date_rdv === ds).sort((a, b) => a.heure.localeCompare(b.heure))
+    return rdvs.filter((r) => r.date_rdv === ds).sort((a, b) => (a.titre ?? "").localeCompare(b.titre ?? ""))
   }
 
   // ── Handlers ───────────────────────────────────────────────────────────────
@@ -230,15 +230,12 @@ export default function PlanningPage() {
     e.preventDefault()
     if (!form.titre || !form.date) return
     const { error: insertError } = await supabase.from('rdvs').insert([{
-      titre:    form.titre,
-      affaire:  form.affaire,
-      type_rdv: form.type,
-      date_rdv: form.date,
-      heure:    form.heure,
-      duree:    form.duree,
-      lieu:     form.lieu,
-      notes:    form.notes || null,
-      fait:     false,
+      titre:     form.titre,
+      type_rdv:  form.type,
+      date_rdv:  form.date,
+      lieu:      form.lieu,
+      notes_prep: form.notes || null,
+      fait:      false,
     }])
     if (insertError) {
       setError(insertError.message)
@@ -250,7 +247,7 @@ export default function PlanningPage() {
   }
 
   async function toggleTodo(todo: Todo) {
-    await supabase.from('todos').update({ fait: !todo.fait }).eq('id', todo.id)
+    await supabase.from('tous').update({ fait: !todo.fait }).eq('id', todo.id)
     setTodos((p) => p.map((t) => t.id === todo.id ? { ...t, fait: !t.fait } : t))
   }
 
@@ -264,10 +261,9 @@ export default function PlanningPage() {
 
 Je prépare le RDV suivant :
 - Type : ${rdv.type_rdv}
-- Affaire : ${rdv.affaire}
-- Date : ${new Date(rdv.date_rdv).toLocaleDateString("fr-FR")} à ${rdv.heure} (${rdv.duree})
+- Date : ${new Date(rdv.date_rdv).toLocaleDateString("fr-FR")}
 - Lieu : ${rdv.lieu}
-- Notes de préparation : ${rdv.notes || "aucune"}
+- Notes de préparation : ${rdv.notes_prep || "aucune"}
 
 Aide-moi à préparer ce rendez-vous :
 1. Les 3 objectifs prioritaires à atteindre durant ce RDV
@@ -287,23 +283,21 @@ Aide-moi à préparer ce rendez-vous :
   function exportRDVs() {
     exportToCSV(
       rdvs.map(r => ({
-        date:    fmtDateExport(r.date_rdv),
-        heure:   r.heure,
-        titre:   r.titre,
-        type:    r.type_rdv,
-        affaire: r.affaire,
-        lieu:    r.lieu,
-        fait:    r.fait ? "oui" : "non",
+        date:      fmtDateExport(r.date_rdv),
+        titre:     r.titre,
+        type:      r.type_rdv,
+        lieu:      r.lieu,
+        fait:      r.fait ? "oui" : "non",
+        notes_prep: r.notes_prep ?? "",
       })),
       `planning-MEB32-${new Date().toISOString().slice(0, 7)}.csv`,
       [
-        { key: "date",    label: "Date"           },
-        { key: "heure",   label: "Heure"          },
-        { key: "titre",   label: "Titre"          },
-        { key: "type",    label: "Type RDV"       },
-        { key: "affaire", label: "Affaire liée"   },
-        { key: "lieu",    label: "Lieu"           },
-        { key: "fait",    label: "Fait (oui/non)" },
+        { key: "date",      label: "Date"           },
+        { key: "titre",     label: "Titre"          },
+        { key: "type",      label: "Type RDV"       },
+        { key: "lieu",      label: "Lieu"           },
+        { key: "fait",      label: "Fait (oui/non)" },
+        { key: "notes_prep", label: "Notes prép."  },
       ]
     )
   }
@@ -416,9 +410,6 @@ Aide-moi à préparer ce rendez-vous :
                             <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium ${cfg.badge}`}>
                               {rdv.type_rdv}
                             </span>
-                            <span className="text-xs font-semibold ml-auto" style={{ color: "rgba(255,255,255,0.6)" }}>
-                              {rdv.heure} · {rdv.duree}
-                            </span>
                           </div>
                           <p className="font-semibold text-sm" style={{ color: "#f1f5f9" }}>{rdv.titre}</p>
                           {rdv.lieu && (
@@ -524,8 +515,7 @@ Aide-moi à préparer ce rendez-vous :
                               >
                                 <div className="flex items-center gap-1 mb-0.5">
                                   <Clock size={10} className="shrink-0" style={{ color: "rgba(255,255,255,0.4)" }} />
-                                  <span className="text-[10px] font-semibold" style={{ color: "rgba(255,255,255,0.7)" }}>{rdv.heure}</span>
-                                  <span className="text-[10px]" style={{ color: "rgba(255,255,255,0.35)" }}>· {rdv.duree}</span>
+                                  <span className="text-[10px] font-semibold" style={{ color: "rgba(255,255,255,0.7)" }}>—</span>
                                 </div>
                                 <p className="text-[11px] font-semibold leading-tight line-clamp-2" style={{ color: "#f1f5f9" }}>{rdv.titre}</p>
                                 {rdv.lieu && (
@@ -635,10 +625,8 @@ Aide-moi à préparer ce rendez-vous :
                 <div className="px-6 py-4 space-y-3">
                   <div className="grid grid-cols-2 gap-3">
                     {[
-                      { label: "Affaire",  value: selectedRdv.affaire },
-                      { label: "Lieu",     value: selectedRdv.lieu },
-                      { label: "Date",     value: new Date(selectedRdv.date_rdv).toLocaleDateString("fr-FR") },
-                      { label: "Heure",    value: `${selectedRdv.heure} · ${selectedRdv.duree}` },
+                      { label: "Lieu",  value: selectedRdv.lieu },
+                      { label: "Date",  value: new Date(selectedRdv.date_rdv).toLocaleDateString("fr-FR") },
                     ].map(({ label, value }) => (
                       <div key={label} className="rounded-xl px-3 py-2" style={{ background: "rgba(255,255,255,0.06)" }}>
                         <p className="text-[10px] uppercase tracking-wide mb-0.5" style={{ color: "rgba(255,255,255,0.35)" }}>{label}</p>
@@ -646,10 +634,10 @@ Aide-moi à préparer ce rendez-vous :
                       </div>
                     ))}
                   </div>
-                  {selectedRdv.notes && (
+                  {selectedRdv.notes_prep && (
                     <div className="rounded-xl px-4 py-3" style={{ background: "rgba(99,102,241,0.1)", border: "1px solid rgba(99,102,241,0.2)" }}>
                       <p className="text-xs font-medium mb-1 uppercase tracking-wide" style={{ color: "rgba(165,180,252,0.7)" }}>Notes de préparation</p>
-                      <p className="text-sm" style={{ color: "#f1f5f9" }}>{selectedRdv.notes}</p>
+                      <p className="text-sm" style={{ color: "#f1f5f9" }}>{selectedRdv.notes_prep}</p>
                     </div>
                   )}
                 </div>

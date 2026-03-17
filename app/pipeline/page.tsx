@@ -127,13 +127,10 @@ function AffaireCard({
         <p className="font-semibold text-[#f1f5f9] text-sm leading-tight">{affaire.nom}</p>
       </div>
 
-      {/* Badges type projet + interlocuteur */}
+      {/* Badge type projet */}
       <div className="flex flex-wrap gap-1">
         <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${TYPE_PROJET_STYLE[affaire.type_projet] ?? "bg-white/10 text-white/50"}`}>
           {TYPE_PROJET_LABEL[affaire.type_projet] ?? affaire.type_projet}
-        </span>
-        <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${TYPE_INTER_STYLE[affaire.type_interlocuteur] ?? "bg-white/10 text-white/50"}`}>
-          {TYPE_INTER_LABEL[affaire.type_interlocuteur] ?? affaire.type_interlocuteur}
         </span>
       </div>
 
@@ -175,7 +172,7 @@ function ModalNouvelleAffaire({
   onAjouter,
 }: {
   onClose: () => void
-  onAjouter: (a: Omit<Affaire, "id" | "created_at" | "notes_concurrence" | "soncas">) => Promise<void>
+  onAjouter: (a: Partial<Omit<Affaire, "id" | "created_at">>) => Promise<void>
 }) {
   const [form, setForm] = useState(FORM_VIDE)
   const [submitting, setSubmitting] = useState(false)
@@ -192,16 +189,14 @@ function ModalNouvelleAffaire({
     setFormError(null)
     try {
       await onAjouter({
-        nom:                form.structure,
-        type_interlocuteur: TYPE_INTER_MAP[form.type_inter] ?? "eleveur",
-        type_projet:        TYPE_PROJET_MAP[form.type_projet] ?? "neuf",
-        espece:             form.espece,
-        nb_places:          parseInt(form.nb_places) || 0,
-        montant_estime:     parseInt(form.montant_estime) || 0,
-        decision_prevue:    form.date_decision || null,
-        concurrent:         form.concurrent || null,
-        etape:              ETAPE_MAP[form.etape] ?? "prospection",
-        prochaine_action:   null,
+        nom:             form.structure,
+        type_projet:     TYPE_PROJET_MAP[form.type_projet] ?? "neuf",
+        espece:          form.espece,
+        nb_places:       parseInt(form.nb_places) || 0,
+        montant_estime:  parseInt(form.montant_estime) || 0,
+        decision_prevue: form.date_decision || null,
+        concurrent:      form.concurrent || null,
+        etape:           ETAPE_MAP[form.etape] ?? "prospection",
       })
       onClose()
     } catch (err: unknown) {
@@ -395,7 +390,7 @@ export default function PipelinePage() {
       setLoading(true)
       setError(null)
       const { data, error } = await supabase
-        .from("affaires")
+        .from("entreprises")
         .select("*")
         .order("created_at", { ascending: false })
       if (error) throw error
@@ -412,16 +407,16 @@ export default function PipelinePage() {
     if (!affaire) return
     const suivante = ETAPE_SUIVANTE[affaire.etape]
     if (!suivante) return
-    await supabase.from("affaires").update({ etape: suivante }).eq("id", id)
+    await supabase.from("entreprises").update({ etape: suivante }).eq("id", id)
     setAffaires((prev) =>
       prev.map((a) => (a.id === id ? { ...a, etape: suivante } : a))
     )
   }
 
   async function ajouterAffaire(
-    data: Omit<Affaire, "id" | "created_at" | "notes_concurrence" | "soncas">
+    data: Partial<Omit<Affaire, "id" | "created_at">>
   ) {
-    const { error } = await supabase.from("affaires").insert([data])
+    const { error } = await supabase.from("entreprises").insert([data])
     if (error) {
       console.error("Supabase error details:", error)
       throw error

@@ -9,7 +9,7 @@ export default function TestSupabase() {
     async function test() {
       // Test 1 : lire les affaires
       const { data: readData, error: readError } = await supabase
-        .from("affaires")
+        .from("entreprises")
         .select("*")
         .limit(1)
 
@@ -22,7 +22,7 @@ export default function TestSupabase() {
 
       // Test 2 : insérer une affaire minimale
       const { data: insertData, error: insertError } = await supabase
-        .from("affaires")
+        .from("entreprises")
         .insert([{ nom: "TEST - à supprimer" }])
         .select()
 
@@ -34,14 +34,14 @@ export default function TestSupabase() {
       setResult(`SUCCÈS ! ID créé: ${insertData?.[0]?.id}`)
 
       // Nettoyer le test
-      await supabase.from("affaires").delete().eq("nom", "TEST - à supprimer")
+      await supabase.from("entreprises").delete().eq("nom", "TEST - à supprimer")
     }
     test()
   }, [])
 
   return (
     <div style={{ padding: 32, fontFamily: "monospace", background: "#0f172a", minHeight: "100vh", color: "#f1f5f9" }}>
-      <h1 style={{ fontSize: 20, marginBottom: 16 }}>Test Supabase — affaires</h1>
+      <h1 style={{ fontSize: 20, marginBottom: 16 }}>Test Supabase — entreprises</h1>
       <pre style={{
         background: "#1e293b", padding: 20, borderRadius: 8,
         whiteSpace: "pre-wrap", wordBreak: "break-all",

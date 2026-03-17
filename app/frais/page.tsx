@@ -80,17 +80,17 @@ function exportFraisCSV(frais: FraisEntry[]) {
 function exportKmCSV(km: KmEntry[]) {
   exportToCSV(
     km.map(k => ({
-      date:         fmtDateExport(k.date),
-      depart:       k.depart,
-      arrivee:      k.arrivee,
+      date:         fmtDateExport(k.date_trajet),
+      depart:       k.partir,
+      arrivee:      k.arriver,
       km:           k.km,
       allerRetour:  k.aller_retour ? "oui" : "non",
       motif:        k.motif,
       vehicule:     k.vehicule,
       taux:         k.taux_ik,
-      indemnite:    k.indemnite,
-      mois:         k.date.split("-")[1],
-      annee:        k.date.split("-")[0],
+      indemnite:    k.indemniser,
+      mois:         k.date_trajet ? k.date_trajet.split("-")[1] : "",
+      annee:        k.date_trajet ? k.date_trajet.split("-")[0] : "",
     })),
     `kilometrique-MEB32-${new Date().toISOString().slice(0, 7)}.csv`,
     [
@@ -117,7 +117,7 @@ function exportCSV(frais: FraisEntry[], km: KmEntry[], month: number, year: numb
   })
   km.forEach(k => {
     const aff = affaires.find(a => a.id === k.affaire_id)?.nom ?? ""
-    csv += `Kilométrique,${k.date},"${k.depart} → ${k.arrivee}","${aff}",${k.indemnite},"${k.vehicule} (${k.puissance_fiscale}CV)","${k.km}km × ${k.taux_ik}€/km"\n`
+    csv += `Kilométrique,${k.date_trajet},"${k.partir} → ${k.arriver}","${aff}",${k.indemniser},"${k.vehicule} (${k.puissance_fiscale}CV)","${k.km}km × ${k.taux_ik}€/km"\n`
   })
   const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" })
   const url = URL.createObjectURL(blob)
@@ -158,9 +158,9 @@ export default function FraisPage() {
     try {
       const [fraisRes, kmRes, vehiculesRes, affairesRes] = await Promise.all([
         supabase.from("frais").select("*").order("date", { ascending: false }),
-        supabase.from("km_entries").select("*").order("date", { ascending: false }),
-        supabase.from("vehicules").select("*"),
-        supabase.from("affaires").select("id, nom").order("nom"),
+        supabase.from("km_entrées").select("*").order("date_trajet", { ascending: false }),
+        supabase.from("véhicules").select("*"),
+        supabase.from("entreprises").select("id, nom").order("nom"),
       ])
       if (fraisRes.error)   throw fraisRes.error
       if (kmRes.error)      throw kmRes.error
@@ -185,13 +185,13 @@ export default function FraisPage() {
     return y === year && m === month
   })
   const filteredKm = kmList.filter(k => {
-    const [y, m] = k.date.split("-").map(Number)
+    const [y, m] = (k.date_trajet ?? "").split("-").map(Number)
     return y === year && m === month
   })
 
   const totalFrais        = filteredFrais.reduce((s, f) => s + f.montant_ttc, 0)
   const totalKm           = filteredKm.reduce((s, k) => s + k.km, 0)
-  const totalIndemnites   = filteredKm.reduce((s, k) => s + k.indemnite, 0)
+  const totalIndemnites   = filteredKm.reduce((s, k) => s + k.indemniser, 0)
   const totalRemboursable = totalFrais + totalIndemnites
 
   const catBreakdown = CATEGORIES.map(c => ({
@@ -234,10 +234,10 @@ export default function FraisPage() {
 
   // ── Save km ────────────────────────────────────────────────────────────────
   async function handleSaveKm(k: KmEntry) {
-    const { date, depart, arrivee, km, aller_retour, motif, affaire_id, vehicule, puissance_fiscale, taux_ik, indemnite } = k
+    const { date_trajet, partir, arriver, km, aller_retour, motif, affaire_id, vehicule, puissance_fiscale, taux_ik, indemniser } = k
     const { error: insertError } = await supabase
-      .from("km_entries")
-      .insert({ date, depart, arrivee, km, aller_retour, motif, affaire_id, vehicule, puissance_fiscale, taux_ik, indemnite })
+      .from("km_entrées")
+      .insert({ date_trajet, partir, arriver, km, aller_retour, motif, affaire_id, vehicule, puissance_fiscale, taux_ik, indemniser })
       .select()
       .single()
     if (insertError) { setError(insertError.message); return }
@@ -248,7 +248,7 @@ export default function FraisPage() {
   // ── Delete ─────────────────────────────────────────────────────────────────
   async function handleDelete() {
     if (!deleteConfirm) return
-    const table = deleteConfirm.type === "frais" ? "frais" : "km_entries"
+    const table = deleteConfirm.type === "frais" ? "frais" : "km_entrées"
     const { error: deleteError } = await supabase
       .from(table)
       .delete()
@@ -485,15 +485,15 @@ export default function FraisPage() {
                           </tr>
                         </thead>
                         <tbody>
-                          {[...filteredKm].sort((a, b) => b.date.localeCompare(a.date)).map(k => (
+                          {[...filteredKm].sort((a, b) => (b.date_trajet ?? "").localeCompare(a.date_trajet ?? "")).map(k => (
                             <tr key={k.id} className="hover:bg-white/[0.03] transition-colors" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
                               <td className="py-2.5 px-3 text-xs" style={{ color: "rgba(255,255,255,0.55)" }}>
-                                {k.date.split("-").reverse().join("/")}
+                                {(k.date_trajet ?? "").split("-").reverse().join("/")}
                               </td>
                               <td className="py-2.5 px-3" style={{ color: "#f1f5f9" }}>
-                                <span>{k.depart}</span>
+                                <span>{k.partir}</span>
                                 <span className="mx-1.5" style={{ color: "rgba(255,255,255,0.3)" }}>→</span>
-                                <span>{k.arrivee}</span>
+                                <span>{k.arriver}</span>
                                 {k.aller_retour && (
                                   <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full"
                                     style={{ background: "rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.4)" }}>
@@ -508,7 +508,7 @@ export default function FraisPage() {
                               <td className="py-2.5 px-3 text-xs" style={{ color: "rgba(255,255,255,0.55)" }}>{k.vehicule}</td>
                               <td className="py-2.5 px-3 text-xs" style={{ color: "rgba(255,255,255,0.45)" }}>{k.taux_ik.toFixed(3)} €/km</td>
                               <td className="py-2.5 px-3 font-semibold text-right" style={{ color: "#10b981" }}>
-                                {fmt(k.indemnite)}
+                                {fmt(k.indemniser)}
                               </td>
                               <td className="py-2.5 px-3">
                                 <button onClick={() => setDeleteConfirm({ type: "km", id: k.id })}
@@ -923,11 +923,11 @@ function AddKmModal({
   onClose: () => void
   onSave: (k: KmEntry) => void
 }) {
-  const defaultV = vehicules.find(v => v.est_defaut) ?? vehicules[0]
+  const defaultV = vehicules.find(v => v.est_default) ?? vehicules[0]
   const [form, setForm] = useState({
-    date:          new Date().toISOString().split("T")[0],
-    depart:        "",
-    arrivee:       "",
+    date_trajet:   new Date().toISOString().split("T")[0],
+    partir:        "",
+    arriver:       "",
     km:            "",
     aller_retour:  false,
     affaire_id:    "",
@@ -942,17 +942,17 @@ function AddKmModal({
   const rate         = IK_RATES[Math.min(cv, 7)] ?? 0.697
   const kmBase       = parseFloat(form.km) || 0
   const kmTotal      = form.aller_retour ? kmBase * 2 : kmBase
-  const indemnite    = Math.round(kmTotal * rate * 100) / 100
-  const canSave      = !!form.km && !!form.depart && !!form.arrivee
+  const indemniser   = Math.round(kmTotal * rate * 100) / 100
+  const canSave      = !!form.km && !!form.partir && !!form.arriver
 
   function handleSave() {
     if (!canSave) return
     onSave({
       id:                `k${Date.now()}`,
       created_at:        new Date().toISOString(),
-      date:              form.date,
-      depart:            form.depart,
-      arrivee:           form.arrivee,
+      date_trajet:       form.date_trajet,
+      partir:            form.partir,
+      arriver:           form.arriver,
       km:                kmTotal,
       aller_retour:      form.aller_retour,
       motif:             form.motif,
@@ -960,7 +960,9 @@ function AddKmModal({
       vehicule:          selectedV?.nom ?? "",
       puissance_fiscale: cv,
       taux_ik:           rate,
-      indemnite,
+      indemniser,
+      mois:              null,
+      annee:             null,
     })
   }
 
@@ -977,11 +979,11 @@ function AddKmModal({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs mb-1.5" style={{ color: "rgba(255,255,255,0.5)" }}>Départ *</label>
-              <input className="input-glass" placeholder="Auch (32)" value={form.depart} onChange={e => setF("depart", e.target.value)} />
+              <input className="input-glass" placeholder="Auch (32)" value={form.partir} onChange={e => setF("partir", e.target.value)} />
             </div>
             <div>
               <label className="block text-xs mb-1.5" style={{ color: "rgba(255,255,255,0.5)" }}>Arrivée *</label>
-              <input className="input-glass" placeholder="Agen (47)" value={form.arrivee} onChange={e => setF("arrivee", e.target.value)} />
+              <input className="input-glass" placeholder="Agen (47)" value={form.arriver} onChange={e => setF("arriver", e.target.value)} />
             </div>
           </div>
 
@@ -1009,7 +1011,7 @@ function AddKmModal({
             <select className="select-glass w-full" value={form.vehicule_id} onChange={e => setF("vehicule_id", e.target.value)}>
               {vehicules.length === 0 && <option value="">— Aucun véhicule configuré —</option>}
               {vehicules.map(v => (
-                <option key={v.id} value={v.id}>{v.nom} ({v.puissance_fiscale}CV){v.est_defaut ? " ★" : ""}</option>
+                <option key={v.id} value={v.id}>{v.nom} ({v.puissance_fiscale}CV){v.est_default ? " ★" : ""}</option>
               ))}
             </select>
           </div>
@@ -1029,7 +1031,7 @@ function AddKmModal({
             </div>
             <div>
               <label className="block text-xs mb-1.5" style={{ color: "rgba(255,255,255,0.5)" }}>Date</label>
-              <input type="date" className="input-glass" value={form.date} onChange={e => setF("date", e.target.value)} />
+              <input type="date" className="input-glass" value={form.date_trajet} onChange={e => setF("date_trajet", e.target.value)} />
             </div>
           </div>
         </div>
@@ -1048,7 +1050,7 @@ function AddKmModal({
                   </p>
                 )}
               </div>
-              <p className="text-xl font-bold" style={{ color: "#10b981" }}>{fmt(indemnite)}</p>
+              <p className="text-xl font-bold" style={{ color: "#10b981" }}>{fmt(indemniser)}</p>
             </div>
           </div>
         )}
@@ -1084,7 +1086,7 @@ function SettingsModal({
 }) {
   const [list, setList] = useState<Vehicule[]>(vehicules)
   const [showAdd, setShowAdd] = useState(false)
-  const [newV, setNewV] = useState({ nom: "", immatriculation: "", puissance_fiscale: 5, type_vehicule: "thermique" })
+  const [newV, setNewV] = useState({ nom: "", immatriculation: "", puissance_fiscale: 5, "type_véhicule": "thermique" })
 
   async function updateList(updated: Vehicule[]) {
     setList(updated)
@@ -1093,26 +1095,26 @@ function SettingsModal({
 
   async function addVehicule() {
     if (!newV.nom) return
-    const payload = { ...newV, est_defaut: list.length === 0 }
-    const { data, error } = await supabase.from("vehicules").insert([payload]).select().single()
+    const payload = { ...newV, est_default: list.length === 0 }
+    const { data, error } = await supabase.from("véhicules").insert([payload]).select().single()
     if (error) { console.error(error); return }
     const updated = [...list, data as Vehicule]
     await updateList(updated)
     setShowAdd(false)
-    setNewV({ nom: "", immatriculation: "", puissance_fiscale: 5, type_vehicule: "thermique" })
+    setNewV({ nom: "", immatriculation: "", puissance_fiscale: 5, "type_véhicule": "thermique" })
     await onRefresh()
   }
 
   async function setDefault(id: string) {
     for (const v of list) {
-      await supabase.from("vehicules").update({ est_defaut: v.id === id }).eq("id", v.id)
+      await supabase.from("véhicules").update({ est_default: v.id === id }).eq("id", v.id)
     }
-    await updateList(list.map(v => ({ ...v, est_defaut: v.id === id })))
+    await updateList(list.map(v => ({ ...v, est_default: v.id === id })))
     await onRefresh()
   }
 
   async function removeVehicule(id: string) {
-    await supabase.from("vehicules").delete().eq("id", id)
+    await supabase.from("véhicules").delete().eq("id", id)
     await updateList(list.filter(v => v.id !== id))
     await onRefresh()
   }
@@ -1145,19 +1147,19 @@ function SettingsModal({
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate" style={{ color: "#f1f5f9" }}>{v.nom}</p>
                 <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.4)" }}>
-                  {v.immatriculation} · {v.puissance_fiscale}{v.puissance_fiscale >= 7 ? "+" : ""} CV · {v.type_vehicule}
+                  {v.immatriculation} · {v.puissance_fiscale}{v.puissance_fiscale >= 7 ? "+" : ""} CV · {v["type_véhicule"]}
                 </p>
               </div>
               <button
                 onClick={() => setDefault(v.id)}
                 className="text-xs px-2.5 py-1 rounded-lg border transition-all shrink-0"
                 style={{
-                  background:  v.est_defaut ? "rgba(99,102,241,0.2)" : "rgba(255,255,255,0.04)",
-                  borderColor: v.est_defaut ? "rgba(99,102,241,0.4)" : "rgba(255,255,255,0.1)",
-                  color:       v.est_defaut ? "#a5b4fc" : "rgba(255,255,255,0.4)",
-                }}
+                  background:  v.est_default ? "rgba(99,102,241,0.2)" : "rgba(255,255,255,0.04)",
+                  borderColor: v.est_default ? "rgba(99,102,241,0.4)" : "rgba(255,255,255,0.1)",
+                  color:       v.est_default ? "#a5b4fc" : "rgba(255,255,255,0.4)",
+}}
               >
-                {v.est_defaut ? "★ Par défaut" : "Définir défaut"}
+                {v.est_default ? "★ Par défaut" : "Définir défaut"}
               </button>
               <button
                 onClick={() => removeVehicule(v.id)}
@@ -1192,8 +1194,8 @@ function SettingsModal({
                 </div>
                 <div>
                   <label className="block text-xs mb-1" style={{ color: "rgba(255,255,255,0.5)" }}>Type</label>
-                  <select className="select-glass w-full" value={newV.type_vehicule}
-                    onChange={e => setNewV(p => ({ ...p, type_vehicule: e.target.value }))}>
+                  <select className="select-glass w-full" value={newV["type_véhicule"]}
+                    onChange={e => setNewV(p => ({ ...p, "type_véhicule": e.target.value }))}>
                     <option value="thermique">Thermique</option>
                     <option value="hybride">Hybride</option>
                     <option value="electrique">Électrique</option>
@@ -1330,10 +1332,10 @@ function RecapModal({
               <tbody>
                 {km.map(k => (
                   <tr key={k.id} style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-                    <td className="py-2 px-2" style={{ color: "rgba(255,255,255,0.5)" }}>{k.date.split("-").reverse().join("/")}</td>
-                    <td className="py-2 px-2" style={{ color: "#f1f5f9" }}>{k.depart} → {k.arrivee}</td>
+                    <td className="py-2 px-2" style={{ color: "rgba(255,255,255,0.5)" }}>{(k.date_trajet ?? "").split("-").reverse().join("/")}</td>
+                    <td className="py-2 px-2" style={{ color: "#f1f5f9" }}>{k.partir} → {k.arriver}</td>
                     <td className="py-2 px-2" style={{ color: "rgba(255,255,255,0.6)" }}>{k.km} km</td>
-                    <td className="py-2 px-2 font-semibold" style={{ color: "#10b981" }}>{fmt(k.indemnite)}</td>
+                    <td className="py-2 px-2 font-semibold" style={{ color: "#10b981" }}>{fmt(k.indemniser)}</td>
                   </tr>
                 ))}
                 <tr style={{ borderTop: "1px solid rgba(255,255,255,0.1)" }}>
@@ -1437,14 +1439,14 @@ function PrintModal({
                   </tr>
                 </thead>
                 <tbody>
-                  {[...km].sort((a, b) => a.date.localeCompare(b.date)).map(k => (
+                  {[...km].sort((a, b) => (a.date_trajet ?? "").localeCompare(b.date_trajet ?? "")).map(k => (
                     <tr key={k.id} style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-                      <td className="p-2 border" style={{ borderColor: "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.6)" }}>{k.date.split("-").reverse().join("/")}</td>
-                      <td className="p-2 border" style={{ borderColor: "rgba(255,255,255,0.07)", color: "#f1f5f9" }}>{k.depart} → {k.arrivee}</td>
+                      <td className="p-2 border" style={{ borderColor: "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.6)" }}>{(k.date_trajet ?? "").split("-").reverse().join("/")}</td>
+                      <td className="p-2 border" style={{ borderColor: "rgba(255,255,255,0.07)", color: "#f1f5f9" }}>{k.partir} → {k.arriver}</td>
                       <td className="p-2 border" style={{ borderColor: "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.6)" }}>{k.motif}</td>
                       <td className="p-2 border" style={{ borderColor: "rgba(255,255,255,0.07)", color: "#f1f5f9" }}>{k.km} km</td>
                       <td className="p-2 border" style={{ borderColor: "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.5)" }}>{k.taux_ik.toFixed(3)} €/km</td>
-                      <td className="p-2 border text-right font-semibold" style={{ borderColor: "rgba(255,255,255,0.07)", color: "#10b981" }}>{fmt(k.indemnite)}</td>
+                      <td className="p-2 border text-right font-semibold" style={{ borderColor: "rgba(255,255,255,0.07)", color: "#10b981" }}>{fmt(k.indemniser)}</td>
                     </tr>
                   ))}
                   <tr style={{ background: "rgba(16,185,129,0.08)" }}>
