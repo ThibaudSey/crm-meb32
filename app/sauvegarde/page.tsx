@@ -23,12 +23,12 @@ interface TableInfo {
 }
 
 const TABLE_DEFS = [
-  { key: "entreprises",  label: "Affaires",     icon: "💼" },
+  { key: "affaires",     label: "Affaires",     icon: "💼" },
   { key: "devis",        label: "Devis",         icon: "📄" },
   { key: "rdvs",         label: "RDV Planning",  icon: "📅" },
-  { key: "tous",         label: "Todos",         icon: "✅" },
+  { key: "todos",        label: "Todos",         icon: "✅" },
   { key: "frais",        label: "Frais",         icon: "🧾" },
-  { key: "km_entrées",   label: "Kilométrique",  icon: "🚗" },
+  { key: "km_entries",   label: "Kilométrique",  icon: "🚗" },
   { key: "fournisseurs", label: "Fournisseurs",  icon: "🏭" },
 ]
 
@@ -36,7 +36,7 @@ const TABLE_DEFS = [
 
 function exportModuleCSV(key: string, data: TableRow[]) {
   const now = new Date().toISOString().slice(0, 7)
-  if (key === "entreprises") {
+  if (key === "affaires") {
     exportToCSV(data.map(a => ({ ...a })), `affaires-${now}.csv`, [
       { key: "nom",            label: "Nom affaire"    },
       { key: "etape",         label: "Étape"          },
@@ -49,7 +49,7 @@ function exportModuleCSV(key: string, data: TableRow[]) {
     ])
   } else if (key === "devis") {
     exportToCSV(data.map(d => ({ ...d })), `devis-${now}.csv`, [
-      { key: "référence",  label: "Référence"  },
+      { key: "reference",  label: "Référence"  },
       { key: "total_ht",   label: "Total HT €" },
       { key: "statut",     label: "Statut"     },
       { key: "date_envoi", label: "Date envoi" },
@@ -70,15 +70,15 @@ function exportModuleCSV(key: string, data: TableRow[]) {
       { key: "montant_ttc", label: "Montant TTC €" },
       { key: "affaire_id",  label: "Affaire"       },
     ])
-  } else if (key === "km_entrées") {
-    exportToCSV(data.map(k => ({ ...k, date: fmtDateExport(k.date_trajet as string) })), `km-${now}.csv`, [
-      { key: "date_trajet", label: "Date"        },
-      { key: "partir",      label: "Départ"      },
-      { key: "arriver",     label: "Arrivée"     },
-      { key: "km",          label: "KM"          },
-      { key: "vehicule",    label: "Véhicule"    },
-      { key: "taux_ik",     label: "Taux IK"     },
-      { key: "indemniser",  label: "Indemnité €" },
+  } else if (key === "km_entries") {
+    exportToCSV(data.map(k => ({ ...k, date_fmt: fmtDateExport(k.date as string) })), `km-${now}.csv`, [
+      { key: "date",     label: "Date"        },
+      { key: "depart",   label: "Départ"      },
+      { key: "arrivee",  label: "Arrivée"     },
+      { key: "km",       label: "KM"          },
+      { key: "vehicule", label: "Véhicule"    },
+      { key: "taux_ik",  label: "Taux IK"     },
+      { key: "indemnite",label: "Indemnité €" },
     ])
   } else if (key === "fournisseurs") {
     exportToCSV(data.map(f => ({ ...f })), `fournisseurs-${now}.csv`, [
@@ -88,13 +88,13 @@ function exportModuleCSV(key: string, data: TableRow[]) {
       { key: "note_fiabilite", label: "Note /5"    },
       { key: "zone_geo",       label: "Zone géo"   },
     ])
-  } else if (key === "tous") {
+  } else if (key === "todos") {
     exportToCSV(data.map(t => ({ ...t })), `todos-${now}.csv`, [
-      { key: "texte",          label: "Tâche"       },
-      { key: "categorie",      label: "Catégorie"   },
-      { key: "limite_de_date", label: "Date limite" },
-      { key: "fait",           label: "Fait"        },
-      { key: "urgent",         label: "Urgent"      },
+      { key: "texte",      label: "Tâche"       },
+      { key: "categorie",  label: "Catégorie"   },
+      { key: "date_limite",label: "Date limite" },
+      { key: "fait",       label: "Fait"        },
+      { key: "urgent",     label: "Urgent"      },
     ])
   }
 }

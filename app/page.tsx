@@ -140,7 +140,7 @@ export default function DashboardPage() {
     async function load() {
       const [{ data: aff }, { data: td }, { data: dv }] = await Promise.all([
         supabase.from("entreprises").select("*").order("created_at", { ascending: false }),
-        supabase.from("tous").select("*").order("limite_de_date", { ascending: true }).limit(20),
+        supabase.from("tous").select("*").order("date_limite", { ascending: true }).limit(20),
         supabase.from("devis").select("*").eq("statut", "envoye"),
       ])
       setAffaires(aff ?? [])
@@ -163,7 +163,7 @@ export default function DashboardPage() {
   }, [affairesSignees])
 
   const devisEnAttente = useMemo(() => devis.map(d => ({
-    ref: d["référence"] ?? "—",
+    ref: d.reference ?? "—",
     jours: d.date_envoi
       ? Math.floor((Date.now() - new Date(d.date_envoi).getTime()) / 86400000)
       : 0,

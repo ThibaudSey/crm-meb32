@@ -184,8 +184,8 @@ export default function PlanningPage() {
     try {
       const [rdvsRes, todosRes, affRes] = await Promise.all([
         supabase.from('rdvs').select('*').order('date_rdv', { ascending: true }),
-        supabase.from('tous').select('*').order('limite_de_date', { ascending: true }),
-        supabase.from('entreprises').select('nom').order('nom'),
+        supabase.from('todos').select('*').order('date_limite', { ascending: true }),
+        supabase.from('affaires').select('nom').order('nom'),
       ])
       if (rdvsRes.error) throw rdvsRes.error
       if (todosRes.error) throw todosRes.error
@@ -247,7 +247,7 @@ export default function PlanningPage() {
   }
 
   async function toggleTodo(todo: Todo) {
-    await supabase.from('tous').update({ fait: !todo.fait }).eq('id', todo.id)
+    await supabase.from('todos').update({ fait: !todo.fait }).eq('id', todo.id)
     setTodos((p) => p.map((t) => t.id === todo.id ? { ...t, fait: !t.fait } : t))
   }
 

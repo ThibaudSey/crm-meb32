@@ -165,7 +165,7 @@ export default function AffaireDetailPage() {
       const [affaireRes, prenantesRes, todosRes, notesRes] = await Promise.all([
         supabase.from("entreprises").select("*").eq("id", id).single(),
         supabase.from("parties_prenantes").select("*").eq("affaire_id", id),
-        supabase.from("tous").select("*").eq("affaire_id", id).order("limite_de_date"),
+        supabase.from("tous").select("*").eq("affaire_id", id).order("date_limite"),
         supabase.from("notes historiques").select("*").eq("affaire_id", id).order("created_at", { ascending: false }),
       ])
 
@@ -227,7 +227,7 @@ export default function AffaireDetailPage() {
     const payload = {
       affaire_id: affaire.id,
       texte: newTodoTexte,
-      limite_de_date: newTodoDate || "2026-12-31",
+      date_limite: newTodoDate || "2026-12-31",
       fait: false,
       categorie: newTodoUrgent ? "Urgence" : "Admin",
       urgent: newTodoUrgent,
@@ -244,7 +244,7 @@ export default function AffaireDetailPage() {
     if (!newNoteContenu || !affaire) return
     const payload = {
       affaire_id: affaire.id,
-      taper: newNoteType,
+      type: newNoteType,
       contenu: newNoteContenu,
     }
     const { data, error } = await supabase.from("notes historiques").insert(payload).select().single()
@@ -619,7 +619,7 @@ export default function AffaireDetailPage() {
 
                 <ul className="p-4 space-y-1">
                   {todos.map((todo) => {
-                    const depasse = !todo.fait && isDepasse(todo.limite_de_date)
+                    const depasse = !todo.fait && isDepasse(todo.date_limite)
                     return (
                       <li
                         key={todo.id}
@@ -645,7 +645,7 @@ export default function AffaireDetailPage() {
                           <div className="flex items-center gap-2 mt-0.5">
                             <span className="text-xs" style={{ color: depasse ? "#ef4444" : "rgba(255,255,255,0.35)", fontWeight: depasse ? 600 : 400 }}>
                               {depasse && <AlertCircle size={10} className="inline mr-0.5" />}
-                              {todo.limite_de_date ? new Date(todo.limite_de_date).toLocaleDateString("fr-FR") : "—"}
+                              {todo.date_limite ? new Date(todo.date_limite).toLocaleDateString("fr-FR") : "—"}
                             </span>
                             <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${TODO_CAT_STYLE[todo.categorie] ?? TODO_CAT_STYLE["Admin"]}`}>
                               {todo.categorie}
@@ -700,7 +700,7 @@ export default function AffaireDetailPage() {
                 {/* Timeline */}
                 <div className="p-5 space-y-0">
                   {notes.map((note, i) => {
-                    const noteStyle = NOTE_TYPE_STYLE[note.taper] ?? NOTE_TYPE_STYLE["Appel"]
+                    const noteStyle = NOTE_TYPE_STYLE[note.type] ?? NOTE_TYPE_STYLE["Appel"]
                     const { dot, badge } = noteStyle
                     const isLast = i === notes.length - 1
                     return (
@@ -712,7 +712,7 @@ export default function AffaireDetailPage() {
 
                         <div className={`flex-1 ${!isLast ? "pb-5" : ""}`}>
                           <div className="flex items-center gap-2 mb-1">
-                            <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${badge}`}>{note.taper}</span>
+                            <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${badge}`}>{note.type}</span>
                             <span className="text-xs" style={{ color: "rgba(255,255,255,0.35)" }}>
                               {new Date(note.created_at).toLocaleDateString("fr-FR")}
                             </span>
@@ -727,7 +727,7 @@ export default function AffaireDetailPage() {
                           <button
                             onClick={() => ouvrirPrompt(
                               "Structurer cette note avec Claude",
-                              `Tu es un assistant CRM commercial avicole.\n\nVoici une note brute prise lors d'un ${note.taper.toLowerCase()} avec ${affaire.nom} le ${new Date(note.created_at).toLocaleDateString("fr-FR")} :\n\n"${note.contenu}"\n\nStructure cette note en :\n1. Résumé en 2 phrases\n2. Points clés identifiés (besoins, objections, opportunités)\n3. Actions recommandées suite à ce ${note.taper.toLowerCase()}\n4. Signaux d'achat détectés`
+                              `Tu es un assistant CRM commercial avicole.\n\nVoici une note brute prise lors d'un ${note.type.toLowerCase()} avec ${affaire.nom} le ${new Date(note.created_at).toLocaleDateString("fr-FR")} :\n\n"${note.contenu}"\n\nStructure cette note en :\n1. Résumé en 2 phrases\n2. Points clés identifiés (besoins, objections, opportunités)\n3. Actions recommandées suite à ce ${note.type.toLowerCase()}\n4. Signaux d'achat détectés`
                             )}
                             className="mt-1.5 text-xs flex items-center gap-1 transition-colors"
                             style={{ color: "rgba(255,255,255,0.35)" }}

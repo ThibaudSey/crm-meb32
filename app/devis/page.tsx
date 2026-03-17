@@ -70,9 +70,9 @@ function ModalNouveauDevis({
       const year = new Date().getFullYear()
       const ref = `DEV-${year}-${String(Date.now()).slice(-4)}`
       const { error: insertError } = await supabase.from("devis").insert({
-        "référence": ref,
-        affaire_id:  form.affaire_id || null,
-        statut:      "brouillon",
+        reference:  ref,
+        affaire_id: form.affaire_id || null,
+        statut:     "brouillon",
       })
       if (insertError) throw insertError
       onCreated()
@@ -206,7 +206,7 @@ export default function DevisPage() {
           ? Math.floor((today - new Date(d.date_envoi).getTime()) / 86400000)
           : null
         return {
-          ref:          d["référence"],
+          ref:          d.reference,
           totalHT:      d.total_ht,
           statut:       d.statut,
           dateCreation: "",
@@ -285,7 +285,7 @@ export default function DevisPage() {
                       onClick={() => router.push(`/devis/${d.id}`)}
                       className="font-semibold underline underline-offset-2 hover:opacity-80 transition-opacity"
                     >
-                      {d["référence"]}
+                      {d.reference}
                     </button>{" "}
                     (J+{d.jours})
                     {i < devisARelancer.length - 1 ? ", " : ""}
@@ -327,7 +327,7 @@ export default function DevisPage() {
                 >
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div>
-                      <p className="font-mono text-xs font-semibold mt-0.5" style={{ color: "rgba(255,255,255,0.4)" }}>{d["référence"]}</p>
+                      <p className="font-mono text-xs font-semibold mt-0.5" style={{ color: "rgba(255,255,255,0.4)" }}>{d.reference}</p>
                     </div>
                     <span className="text-base font-bold whitespace-nowrap" style={{ color: "#10b981" }}>
                       {fmt(d.total_ht)}
@@ -377,7 +377,7 @@ export default function DevisPage() {
                         style={relance ? { background: "rgba(249,115,22,0.05)" } : undefined}
                       >
                         <td className="px-5 py-3.5">
-                          <span className="font-mono text-xs font-semibold" style={{ color: "#f1f5f9" }}>{d["référence"]}</span>
+                          <span className="font-mono text-xs font-semibold" style={{ color: "#f1f5f9" }}>{d.reference}</span>
                         </td>
                         <td className="px-4 py-3.5 font-medium text-white/50" style={{ color: "#f1f5f9" }}>—</td>
                         <td className="px-4 py-3.5 hidden sm:table-cell text-xs" style={{ color: "rgba(255,255,255,0.5)" }}>—</td>

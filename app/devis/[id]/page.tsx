@@ -176,7 +176,7 @@ export default function DevisEditorPage() {
   // ── Handlers lignes ───────────────────────────────────────────────────────────
 
   async function updateLigne(ligneId: string, field: keyof DevisLigne, raw: string) {
-    const val = field === "désignation" ? raw : (parseFloat(raw) || 0)
+    const val = field === "designation" ? raw : (parseFloat(raw) || 0)
     // Update local state immediately for responsive feel
     setLignes((prev) =>
       prev.map((l) => (l.id === ligneId ? { ...l, [field]: val } : l))
@@ -192,7 +192,7 @@ export default function DevisEditorPage() {
     const ordre = lignes.length > 0 ? Math.max(...lignes.map((l) => l.ordre)) + 1 : 1
     const payload = {
       devis_id: id,
-      "désignation": "",
+      designation: "",
       quantite: 1,
       prix_unitaire: 0,
       remise_pct: 0,
@@ -218,7 +218,7 @@ export default function DevisEditorPage() {
 
   // ── Prompts IA ────────────────────────────────────────────────────────────────
   const affaireLabel = affairesList.find((a) => a.id === affaireId)?.nom ?? "inconnue"
-  const ref = devis?.["référence"] ?? `DEV-${id}`
+  const ref = devis?.reference ?? `DEV-${id}`
 
   function buildPromptMarge() {
     const detail = lignes
@@ -226,7 +226,7 @@ export default function DevisEditorPage() {
         const tot = ligneTotal(l)
         const rev = ligneRevient(l)
         const m   = tot > 0 ? ((tot - rev) / tot * 100).toFixed(1) : "—"
-        return `  • ${l["désignation"] || "(sans titre)"} : ${l.quantite} × ${fmtN(l.prix_unitaire, 0)} €${l.remise_pct > 0 ? ` -${l.remise_pct}%` : ""} = ${fmtN(tot, 0)} € HT (revient ${fmtN(rev, 0)} €, marge ${m}%)`
+        return `  • ${l.designation || "(sans titre)"} : ${l.quantite} × ${fmtN(l.prix_unitaire, 0)} €${l.remise_pct > 0 ? ` -${l.remise_pct}%` : ""} = ${fmtN(tot, 0)} € HT (revient ${fmtN(rev, 0)} €, marge ${m}%)`
       })
       .join("\n")
     return `Tu es un expert en pricing équipement avicole.
@@ -443,8 +443,8 @@ Prépare-moi :
                       <tr key={l.id} className="group transition-colors hover:bg-white/[0.04]" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
                         <td className="px-4 py-2" style={{ color: "#f1f5f9" }}>
                           <Cell
-                            value={l["désignation"]}
-                            onChange={(v) => updateLigne(l.id, "désignation", v)}
+                            value={l.designation}
+                            onChange={(v) => updateLigne(l.id, "designation", v)}
                             placeholder="Désignation de la ligne…"
                             className="font-medium"
                           />

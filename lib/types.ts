@@ -47,7 +47,7 @@ export interface HistoriqueNote {
   id: string
   affaire_id: string
   created_at: string
-  taper: string
+  type: string
   contenu: string
 }
 
@@ -57,7 +57,7 @@ export interface Todo {
   id: string
   created_at: string
   texte: string
-  limite_de_date: string
+  date_limite: string
   fait: boolean
   urgent: boolean
   categorie: string
@@ -69,7 +69,7 @@ export interface Todo {
 export interface Devis {
   id: string
   created_at: string
-  "référence": string
+  reference: string
   affaire_id: string | null
   total_ht: number
   cout_revient_total: number | null
@@ -81,7 +81,7 @@ export interface Devis {
 export interface DevisLigne {
   id: string
   devis_id: string
-  "désignation": string
+  designation: string
   quantite: number
   prix_unitaire: number
   remise_pct: number
@@ -123,9 +123,9 @@ export interface FraisEntry {
 export interface KmEntry {
   id: string
   created_at: string
-  date_trajet: string
-  partir: string
-  arriver: string
+  date: string
+  depart: string
+  arrivee: string
   km: number
   aller_retour: boolean
   motif: string
@@ -133,7 +133,7 @@ export interface KmEntry {
   vehicule: string
   puissance_fiscale: number
   taux_ik: number
-  indemniser: number
+  indemnite: number
   mois: number | null
   annee: number | null
 }
@@ -143,8 +143,8 @@ export interface Vehicule {
   nom: string
   immatriculation: string
   puissance_fiscale: number
-  "type_véhicule": string
-  est_default: boolean
+  type_vehicule: string
+  est_defaut: boolean
 }
 
 // ─── Fournisseurs ─────────────────────────────────────────────────────────────
