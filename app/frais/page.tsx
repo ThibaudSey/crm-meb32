@@ -162,16 +162,29 @@ export default function FraisPage() {
         supabase.from("véhicules").select("*"),
         supabase.from("entreprises").select("id, nom").order("nom"),
       ])
-      if (fraisRes.error)   throw fraisRes.error
-      if (kmRes.error)      throw kmRes.error
-      // vehicules: graceful fallback if table doesn't exist
-      if (!vehiculesRes.error) setVehicules(vehiculesRes.data || [])
-      if (affairesRes.error) throw affairesRes.error
-      setFraisList(fraisRes.data || [])
-      setKmList(kmRes.data || [])
-      setAffaires(affairesRes.data || [])
+
+      // Log toutes les erreurs pour diagnostic
+      if (fraisRes.error)    console.error("[frais] table 'frais':", fraisRes.error)
+      if (kmRes.error)       console.error("[frais] table 'km_entrées':", kmRes.error)
+      if (vehiculesRes.error)console.error("[frais] table 'véhicules':", vehiculesRes.error)
+      if (affairesRes.error) console.error("[frais] table 'entreprises':", affairesRes.error)
+
+      // Toutes les tables sont optionnelles — fallback vide si absente
+      setFraisList(fraisRes.data ?? [])
+      setKmList(kmRes.data ?? [])
+      setVehicules(vehiculesRes.data ?? [])
+      setAffaires(affairesRes.data ?? [])
+
+      // N'afficher une erreur bloquante que si toutes les tables échouent
+      const errors = [fraisRes.error, kmRes.error].filter(Boolean)
+      if (errors.length === 2) {
+        const msg = (fraisRes.error as { message?: string })?.message ?? "Tables frais introuvables"
+        setError(msg)
+      }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Erreur inconnue")
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error("[frais] fetchData exception:", msg)
+      setError(msg)
     } finally {
       setLoading(false)
     }

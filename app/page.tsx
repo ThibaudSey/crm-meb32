@@ -1,129 +1,203 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
-import { TrendingUp, TrendingDown, GitMerge, Percent, AlertTriangle, CheckSquare, Square, Euro } from "lucide-react"
+import { useState, useEffect } from "react"
+import { CheckSquare, Square, CheckCircle, XCircle, Loader2, Bot, AlertTriangle, CalendarDays, Clock } from "lucide-react"
 import Sidebar from "@/components/Sidebar"
 import TopBar from "@/components/TopBar"
 import LoadingSpinner from "@/components/LoadingSpinner"
 import { supabase } from "@/lib/supabase"
-import type { Affaire, Todo, Devis } from "@/lib/types"
+import type { Todo } from "@/lib/types"
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// ─── Types Agenda ─────────────────────────────────────────────────────────────
 
-const CA_OBJECTIF = 400000
-
-// DB values for pipeline stages
-const ETAPES_PIPELINE = [
-  { dbValue: "prospection", label: "Prospection"    },
-  { dbValue: "r1",          label: "R1 Découverte"  },
-  { dbValue: "r2",          label: "R2 Proposition" },
-  { dbValue: "negociation", label: "Négociation"    },
-  { dbValue: "signe",       label: "Signé"          },
-]
-
-const ETAPE_BADGE: Record<string, string> = {
-  prospection: "bg-sky-500/20 border border-sky-500/40 text-sky-300",
-  r1:          "bg-amber-500/20 border border-amber-500/40 text-amber-300",
-  r2:          "bg-blue-500/20 border border-blue-500/40 text-blue-300",
-  negociation: "bg-violet-500/20 border border-violet-500/40 text-violet-300",
-  signe:       "bg-emerald-500/20 border border-emerald-500/40 text-emerald-300",
-  perdu:       "bg-red-500/20 border border-red-500/40 text-red-300",
+interface Evenement {
+  id: string
+  titre: string
+  date_debut: string
+  type_evenement?: string | null
+  affaire_id?: string | null
+  affaire_nom?: string | null
 }
 
-const ETAPE_LABEL: Record<string, string> = {
-  prospection: "Prospection",
-  r1:          "R1 Découverte",
-  r2:          "R2 Proposition",
-  negociation: "Négociation",
-  signe:       "Signé",
-  perdu:       "Perdu",
+const TYPE_EVT_BADGE: Record<string, string> = {
+  rdv:        "bg-indigo-500/20 border border-indigo-500/40 text-indigo-300",
+  appel:      "bg-sky-500/20 border border-sky-500/40 text-sky-300",
+  visite:     "bg-emerald-500/20 border border-emerald-500/40 text-emerald-300",
+  livraison:  "bg-amber-500/20 border border-amber-500/40 text-amber-300",
+  autre:      "bg-slate-500/20 border border-slate-500/40 text-slate-300",
 }
 
-const TYPE_BADGE: Record<string, string> = {
-  neuf:         "bg-indigo-500/20 border border-indigo-500/40 text-indigo-300",
-  renovation:   "bg-amber-500/20 border border-amber-500/40 text-amber-300",
-  extension:    "bg-emerald-500/20 border border-emerald-500/40 text-emerald-300",
-  remplacement: "bg-red-500/20 border border-red-500/40 text-red-300",
+function labelJour(dateStr: string, todayStr: string): string {
+  const d = dateStr.slice(0, 10)
+  if (d === todayStr) return "Aujourd'hui"
+  const tomorrow = new Date(todayStr); tomorrow.setDate(tomorrow.getDate() + 1)
+  if (d === tomorrow.toISOString().slice(0, 10)) return "Demain"
+  return "Après-demain"
 }
 
-const TYPE_PROJET_LABEL: Record<string, string> = {
-  neuf:         "Neuf",
-  renovation:   "Rénovation",
-  extension:    "Extension",
-  remplacement: "Remplacement",
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface AiSuggestionPayload {
+  route?: string; titre?: string; description?: string; priorite?: string
+  contexte?: string; date_echeance?: string; contact_nom?: string; contact_telephone?: string
 }
 
-const PIPELINE_GRADIENTS = [
-  "from-sky-400 to-sky-600",
-  "from-amber-400 to-amber-600",
-  "from-blue-400 to-blue-600",
-  "from-violet-400 to-violet-600",
-  "from-emerald-400 to-emerald-600",
-]
-
-function fmt(n: number) {
-  return new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 }).format(n) + " €"
+interface AiSuggestion {
+  id: string; inbox_entry_id?: string; affaire_id?: string | null
+  type_suggestion: string; payload: AiSuggestionPayload
+  score_confiance?: number; statut: string
+  date_creation: string; date_validation?: string | null; processed?: boolean
 }
 
-// ─── MetricCard ───────────────────────────────────────────────────────────────
+const SUGGESTION_TYPE_BADGE: Record<string, string> = {
+  task:    "bg-indigo-500/20 border border-indigo-500/40 text-indigo-300",
+  note:    "bg-sky-500/20 border border-sky-500/40 text-sky-300",
+  contact: "bg-emerald-500/20 border border-emerald-500/40 text-emerald-300",
+  event:   "bg-violet-500/20 border border-violet-500/40 text-violet-300",
+}
 
-function MetricCard({
-  label, value, sub, icon: Icon, iconGradient,
-  delta, deltaLabel, progress,
-}: {
-  label: string; value: string; sub?: string
-  icon: React.ElementType; iconGradient: string
-  delta?: number; deltaLabel?: string
-  progress?: { value: number; max: number }
-}) {
-  const pct = progress ? Math.round((progress.value / progress.max) * 100) : null
-  const up  = delta !== undefined && delta > 0
+const PRIORITE_BADGE: Record<string, string> = {
+  haute:  "bg-red-500/20 border border-red-500/40 text-red-300",
+  moyenne:"bg-amber-500/20 border border-amber-500/40 text-amber-300",
+  basse:  "bg-slate-500/20 border border-slate-500/40 text-slate-300",
+}
+
+async function validerSuggestion(s: AiSuggestion) {
+  const res = await fetch("/api/ai-suggestions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      action: "valider",
+      id: s.id,
+      type_suggestion: s.type_suggestion,
+      payload: s.payload,
+    }),
+  })
+  if (!res.ok) {
+    const err = await res.json()
+    console.error("[validerSuggestion] erreur:", err)
+  }
+}
+
+async function rejeterSuggestion(id: string) {
+  await fetch("/api/ai-suggestions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "rejeter", id }),
+  })
+}
+
+// ─── SectionAValider ──────────────────────────────────────────────────────────
+
+function SectionAValider({
+  suggestions, onRefresh,
+}: { suggestions: AiSuggestion[]; onRefresh: () => void }) {
+  const [busy, setBusy] = useState<string | null>(null)
+
+  async function handleValider(s: AiSuggestion) {
+    setBusy(s.id)
+    await validerSuggestion(s)
+    setBusy(null)
+    onRefresh()
+  }
+
+  async function handleRejeter(s: AiSuggestion) {
+    setBusy(s.id)
+    await rejeterSuggestion(s.id)
+    setBusy(null)
+    onRefresh()
+  }
+
+  if (suggestions.length === 0) return null
 
   return (
-    <div className="glass glow-violet p-5 flex flex-col gap-3 hover:scale-[1.01] transition-transform">
-      <div className="flex items-center justify-between">
-        <span style={{ fontSize: "11px", letterSpacing: "0.08em", color: "rgba(255,255,255,0.45)", fontWeight: 600 }} className="uppercase">
-          {label}
-        </span>
-        <div
-          className="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
-          style={{ background: iconGradient, boxShadow: "0 4px 12px rgba(0,0,0,0.2)" }}
+    <div className="glass overflow-hidden">
+      <div className="px-6 py-4 flex items-center gap-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
+        <Bot size={17} style={{ color: "#a78bfa" }} />
+        <h2 className="font-semibold" style={{ color: "#f1f5f9" }}>À valider</h2>
+        <span
+          className="text-xs px-2 py-0.5 rounded-full font-medium ml-1"
+          style={{ background: "rgba(167,139,250,0.15)", color: "#a78bfa", border: "1px solid rgba(167,139,250,0.3)" }}
         >
-          <Icon size={18} className="text-white" />
-        </div>
+          {suggestions.length}
+        </span>
       </div>
 
-      <p style={{ fontSize: "28px", fontWeight: 800, color: "#f1f5f9", letterSpacing: "-0.02em" }}>
-        {value}
-      </p>
+      <ul className="divide-y" style={{ "--tw-divide-opacity": 1 } as React.CSSProperties}>
+        {suggestions.map((s) => {
+          const isBusy = busy === s.id
+          const p: AiSuggestionPayload = typeof s.payload === "string"
+            ? (JSON.parse(s.payload) as AiSuggestionPayload)
+            : (s.payload ?? {})
+          const type = s.type_suggestion
+          return (
+            <li
+              key={s.id}
+              className="px-6 py-4 flex items-start gap-4"
+              style={{ borderColor: "rgba(255,255,255,0.06)" }}
+            >
+              <div className="flex-1 min-w-0 space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border ${SUGGESTION_TYPE_BADGE[type] ?? "bg-slate-500/20 text-slate-300 border-slate-500/40"}`}>
+                    {type}
+                  </span>
+                  {p.priorite && (
+                    <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full border ${PRIORITE_BADGE[p.priorite] ?? ""}`}>
+                      {p.priorite}
+                    </span>
+                  )}
+                  {s.score_confiance !== undefined && s.score_confiance > 0 && (
+                    <span className="text-[11px]" style={{ color: "rgba(255,255,255,0.35)" }}>
+                      Confiance {Math.round(s.score_confiance * 100)}%
+                    </span>
+                  )}
+                </div>
+                {p.titre && (
+                  <p className="text-sm font-semibold" style={{ color: "#f1f5f9" }}>{p.titre}</p>
+                )}
+                {p.description && (
+                  <p className="text-sm" style={{ color: "rgba(255,255,255,0.5)" }}>
+                    {p.description.length > 80 ? p.description.slice(0, 80) + "…" : p.description}
+                  </p>
+                )}
+                {type === "contact" && p.contact_nom && (
+                  <p className="text-sm" style={{ color: "rgba(255,255,255,0.55)" }}>
+                    {p.contact_nom}{p.contact_telephone ? ` — ${p.contact_telephone}` : ""}
+                  </p>
+                )}
+                {p.date_echeance && (
+                  <p className="text-xs" style={{ color: "rgba(255,255,255,0.35)" }}>
+                    Échéance : {new Date(p.date_echeance).toLocaleDateString("fr-FR")}
+                  </p>
+                )}
+              </div>
 
-      <div className="flex items-center justify-between gap-2">
-        {sub && <p className="text-xs" style={{ color: "rgba(255,255,255,0.45)" }}>{sub}</p>}
-        {delta !== undefined && (
-          <div
-            className="flex items-center gap-0.5 text-xs font-semibold ml-auto"
-            style={{ color: up ? "#10b981" : "#ef4444" }}
-          >
-            {up ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-            {up ? "+" : ""}{delta}{deltaLabel ?? "%"}
-          </div>
-        )}
-      </div>
-
-      {pct !== null && (
-        <div>
-          <div className="flex justify-between text-xs mb-1.5" style={{ color: "rgba(255,255,255,0.35)" }}>
-            <span>Objectif {fmt(progress!.max)}</span>
-            <span style={{ fontWeight: 600, color: "rgba(255,255,255,0.6)" }}>{pct}%</span>
-          </div>
-          <div className="h-2 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.1)" }}>
-            <div
-              className="h-full rounded-full transition-all duration-700"
-              style={{ width: `${Math.min(pct, 100)}%`, background: "linear-gradient(90deg, #6366f1, #10b981)" }}
-            />
-          </div>
-        </div>
-      )}
+              <div className="flex items-center gap-2 shrink-0">
+                {isBusy ? (
+                  <Loader2 size={18} className="animate-spin" style={{ color: "rgba(255,255,255,0.4)" }} />
+                ) : (
+                  <>
+                    <button
+                      onClick={() => handleValider(s)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all hover:scale-105"
+                      style={{ background: "rgba(16,185,129,0.15)", color: "#10b981", border: "1px solid rgba(16,185,129,0.3)" }}
+                    >
+                      <CheckCircle size={13} /> Valider
+                    </button>
+                    <button
+                      onClick={() => handleRejeter(s)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all hover:scale-105"
+                      style={{ background: "rgba(239,68,68,0.12)", color: "#ef4444", border: "1px solid rgba(239,68,68,0.25)" }}
+                    >
+                      <XCircle size={13} /> Rejeter
+                    </button>
+                  </>
+                )}
+              </div>
+            </li>
+          )
+        })}
+      </ul>
     </div>
   )
 }
@@ -131,57 +205,59 @@ function MetricCard({
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
-  const [affaires, setAffaires] = useState<Affaire[]>([])
-  const [todos, setTodos]       = useState<Todo[]>([])
-  const [devis, setDevis]       = useState<Devis[]>([])
-  const [loading, setLoading]   = useState(true)
+  const [todos, setTodos]             = useState<Todo[]>([])
+  const [suggestions, setSuggestions] = useState<AiSuggestion[]>([])
+  const [evenements, setEvenements]   = useState<Evenement[]>([])
+  const [loading, setLoading]         = useState(true)
+
+  const today = new Date()
+  const todayStr = today.toISOString().slice(0, 10)
+  const j2 = new Date(today); j2.setDate(j2.getDate() + 2)
+  const j2Str = j2.toISOString().slice(0, 10)
+
+  async function loadSuggestions() {
+    const res = await fetch("/api/ai-suggestions")
+    const json = await res.json() as { data?: AiSuggestion[]; error?: string }
+    console.log("[ai_suggestions] réponse API:", json)
+    console.log("[ai_suggestions] count:", (json.data ?? []).length)
+    setSuggestions(json.data ?? [])
+  }
 
   useEffect(() => {
     async function load() {
-      const [{ data: aff }, { data: td }, { data: dv }] = await Promise.all([
-        supabase.from("entreprises").select("*").order("created_at", { ascending: false }),
-        supabase.from("tous").select("*").order("date_limite", { ascending: true }).limit(20),
-        supabase.from("devis").select("*").eq("statut", "envoye"),
+      const [{ data: td }, { data: evts }] = await Promise.all([
+        supabase
+          .from("taches")
+          .select("*")
+          .neq("statut", "termine")
+          .order("date_echeance", { ascending: true }),
+        supabase
+          .from("evenements")
+          .select("id, titre, date_debut, type_evenement, affaire_id, entreprises(nom)")
+          .gte("date_debut", todayStr)
+          .lte("date_debut", j2Str + "T23:59:59")
+          .order("date_debut", { ascending: true }),
       ])
-      setAffaires(aff ?? [])
-      setTodos(td ?? [])
-      setDevis(dv ?? [])
+      setTodos((td ?? []) as unknown as Todo[])
+      // Aplatir la jointure entreprises(nom) → affaire_nom
+      const evtsFlat: Evenement[] = (evts ?? []).map((e: Record<string, unknown>) => ({
+        id:             e.id as string,
+        titre:          e.titre as string,
+        date_debut:     e.date_debut as string,
+        type_evenement: e.type_evenement as string | null,
+        affaire_id:     e.affaire_id as string | null,
+        affaire_nom:    (e.entreprises as { nom?: string } | null)?.nom ?? null,
+      }))
+      setEvenements(evtsFlat)
+      await loadSuggestions()
       setLoading(false)
     }
     load()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // ── Computed metrics ──
-  const affairesSignees  = useMemo(() => affaires.filter(a => a.etape === "signe"), [affaires])
-  const affairesActives  = useMemo(() => affaires.filter(a => a.etape !== "perdu"), [affaires])
-  const caSigne          = useMemo(() => affairesSignees.reduce((s, a) => s + (a.montant_estime ?? 0), 0), [affairesSignees])
-  const pipelineTotal    = useMemo(() => affairesActives.reduce((s, a) => s + (a.montant_estime ?? 0), 0), [affairesActives])
-  const margeMoyenne     = useMemo(() => {
-    const avecMarge = affairesSignees.filter(a => a.montant_estime && a.cout_revient)
-    if (avecMarge.length === 0) return 0
-    return avecMarge.reduce((s, a) => s + Math.round(((a.montant_estime - (a.cout_revient ?? 0)) / a.montant_estime) * 100), 0) / avecMarge.length
-  }, [affairesSignees])
-
-  const devisEnAttente = useMemo(() => devis.map(d => ({
-    ref: d.reference ?? "—",
-    jours: d.date_envoi
-      ? Math.floor((Date.now() - new Date(d.date_envoi).getTime()) / 86400000)
-      : 0,
-  })).filter(d => d.jours > 0).sort((a, b) => b.jours - a.jours), [devis])
-
-  const pipeline = useMemo(() => ETAPES_PIPELINE.map(({ dbValue, label }) => {
-    const aff = affaires.filter(a => a.etape === dbValue)
-    return {
-      etape: label,
-      affaires: aff.length,
-      ca: aff.reduce((s, a) => s + (a.montant_estime ?? 0), 0),
-    }
-  }), [affaires])
-
-  const dernieresAffaires = affaires.slice(0, 5)
-
   async function toggleTodo(id: string, fait: boolean) {
-    await supabase.from("tous").update({ fait: !fait }).eq("id", id)
+    await supabase.from("taches").update({ statut: fait ? "a_faire" : "termine" }).eq("id", id)
     setTodos(p => p.map(t => t.id === id ? { ...t, fait: !fait } : t))
   }
 
@@ -195,6 +271,13 @@ export default function DashboardPage() {
     </div>
   )
 
+  const todosUrgents = todos.filter(t => {
+    const echeance = (t as unknown as { date_echeance?: string }).date_echeance
+    const depasse = echeance && echeance < todayStr
+    const hauteP  = (t as unknown as { priorite?: string }).priorite === "haute"
+    return depasse || hauteP
+  })
+
   return (
     <div className="flex min-h-screen">
       <Sidebar />
@@ -204,166 +287,110 @@ export default function DashboardPage() {
 
         <main className="flex-1 p-5 md:p-6 pb-20 md:pb-8 space-y-6">
 
-          {/* ── Alerte devis sans retour ── */}
-          {devisEnAttente.length > 0 && (
-            <div className="alert-amber">
-              <AlertTriangle size={17} className="shrink-0 mt-0.5" style={{ color: "#f59e0b" }} />
-              <div className="text-sm">
-                <span className="font-semibold">Devis sans retour :</span>{" "}
-                {devisEnAttente.slice(0, 3).map((d, i) => (
-                  <span key={d.ref}>
-                    {d.ref} <span className="font-bold">({d.jours}j)</span>
-                    {i < Math.min(devisEnAttente.length, 3) - 1 ? ", " : ""}
-                  </span>
-                ))}
-                {devisEnAttente.length > 3 && ` +${devisEnAttente.length - 3} autres`}
-                {" "}— pensez à relancer.
-              </div>
-            </div>
-          )}
+          {/* ── À valider ── */}
+          <SectionAValider suggestions={suggestions} onRefresh={loadSuggestions} />
 
-          {/* ── 4 cartes métriques ── */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <MetricCard
-              label="CA Signé" value={fmt(caSigne)}
-              icon={Euro} iconGradient="linear-gradient(135deg,#10b981,#059669)"
-              progress={{ value: caSigne, max: CA_OBJECTIF }}
-            />
-            <MetricCard
-              label="Pipeline Total" value={fmt(pipelineTotal)}
-              sub={`${affairesActives.length} affaires actives`}
-              icon={GitMerge} iconGradient="linear-gradient(135deg,#6366f1,#8b5cf6)"
-            />
-            <MetricCard
-              label="Marge Moyenne" value={`${margeMoyenne.toFixed(1)}%`}
-              sub="Sur affaires signées"
-              icon={Percent} iconGradient="linear-gradient(135deg,#8b5cf6,#c084fc)"
-            />
-            <MetricCard
-              label="Relances urgentes" value={String(devis.length)}
-              sub="Devis en attente de retour"
-              icon={AlertTriangle} iconGradient="linear-gradient(135deg,#f59e0b,#ef4444)"
-            />
-          </div>
+          {/* ── Urgences + To-do du jour ── */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
 
-          {/* ── Tableau affaires + Todos ── */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-
-            {/* Tableau 5 dernières affaires */}
-            <div className="lg:col-span-2 glass overflow-hidden">
-              <div className="px-6 py-4" style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
-                <h2 className="font-semibold" style={{ color: "#f1f5f9" }}>5 dernières affaires</h2>
-              </div>
-              {dernieresAffaires.length === 0 ? (
-                <p className="p-6 text-sm text-center" style={{ color: "rgba(255,255,255,0.35)" }}>
-                  Aucune affaire pour l&apos;instant
-                </p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="table-glass">
-                    <thead>
-                      <tr>
-                        <th>Structure</th>
-                        <th className="hidden sm:table-cell">Type projet</th>
-                        <th className="right">Montant</th>
-                        <th>Étape</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {dernieresAffaires.map((a) => (
-                        <tr key={a.id} className="cursor-pointer">
-                          <td style={{ fontWeight: 600 }}>{a.nom}</td>
-                          <td className="hidden sm:table-cell">
-                            <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium ${TYPE_BADGE[a.type_projet] ?? ""}`}>
-                              {TYPE_PROJET_LABEL[a.type_projet] ?? a.type_projet}
-                            </span>
-                          </td>
-                          <td className="amount">{fmt(a.montant_estime ?? 0)}</td>
-                          <td>
-                            <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium ${ETAPE_BADGE[a.etape] ?? ""}`}>
-                              {ETAPE_LABEL[a.etape] ?? a.etape}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-
-            {/* To-do du jour */}
+            {/* Urgences */}
             <div className="glass overflow-hidden">
-              <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
-                <h2 className="font-semibold" style={{ color: "#f1f5f9" }}>To-do</h2>
-                <span
-                  className="text-xs px-2 py-0.5 rounded-full font-medium"
-                  style={{ background: "rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.5)" }}
-                >
-                  {todos.filter(t => t.fait).length}/{todos.length}
-                </span>
+              <div className="px-6 py-4 flex items-center gap-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
+                <AlertTriangle size={16} style={{ color: "#f59e0b" }} />
+                <h2 className="font-semibold" style={{ color: "#f1f5f9" }}>Urgences</h2>
+                {todosUrgents.length > 0 && (
+                  <span className="text-xs px-2 py-0.5 rounded-full font-medium ml-1"
+                    style={{ background: "rgba(239,68,68,0.15)", color: "#ef4444", border: "1px solid rgba(239,68,68,0.3)" }}>
+                    {todosUrgents.length}
+                  </span>
+                )}
               </div>
-              {todos.length === 0 ? (
-                <p className="p-6 text-sm text-center" style={{ color: "rgba(255,255,255,0.35)" }}>
-                  Aucune tâche
-                </p>
+              {todosUrgents.length === 0 ? (
+                <p className="p-6 text-sm text-center" style={{ color: "rgba(255,255,255,0.3)" }}>Aucune urgence 🎉</p>
               ) : (
                 <ul className="p-5 space-y-3">
-                  {todos.map((todo) => (
-                    <li
-                      key={todo.id}
-                      onClick={() => toggleTodo(todo.id, todo.fait)}
-                      className="flex items-start gap-3 cursor-pointer group"
-                    >
-                      {todo.fait
-                        ? <CheckSquare size={17} className="shrink-0 mt-0.5" style={{ color: "#10b981" }} />
-                        : <Square size={17} className="shrink-0 mt-0.5 transition-colors" style={{ color: "rgba(255,255,255,0.25)" }} />
-                      }
-                      <span
-                        className="text-sm leading-snug"
-                        style={{
-                          color: todo.fait ? "rgba(255,255,255,0.3)" : "rgba(255,255,255,0.75)",
-                          textDecoration: todo.fait ? "line-through" : "none",
-                        }}
-                      >
-                        {todo.texte}
-                      </span>
-                    </li>
-                  ))}
+                  {todosUrgents.map((todo) => {
+                    const t = todo as unknown as { id: string; titre?: string; texte?: string; date_echeance?: string; priorite?: string; statut?: string }
+                    const fait = t.statut === "termine"
+                    const depasse = t.date_echeance && t.date_echeance < todayStr
+                    return (
+                      <li key={t.id} onClick={() => toggleTodo(t.id, fait)} className="flex items-start gap-3 cursor-pointer group">
+                        {fait
+                          ? <CheckSquare size={17} className="shrink-0 mt-0.5" style={{ color: "#10b981" }} />
+                          : <Square size={17} className="shrink-0 mt-0.5" style={{ color: "rgba(255,255,255,0.25)" }} />
+                        }
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm leading-snug" style={{
+                            color: fait ? "rgba(255,255,255,0.3)" : "#f1f5f9",
+                            textDecoration: fait ? "line-through" : "none",
+                          }}>
+                            {t.titre ?? t.texte}
+                          </p>
+                          {t.date_echeance && (
+                            <p className="text-xs mt-0.5" style={{ color: depasse ? "#ef4444" : "rgba(255,255,255,0.35)" }}>
+                              {depasse ? "⚠ " : ""}
+                              {new Date(t.date_echeance).toLocaleDateString("fr-FR")}
+                            </p>
+                          )}
+                        </div>
+                        {t.priorite === "haute" && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold shrink-0"
+                            style={{ background: "rgba(239,68,68,0.15)", color: "#ef4444", border: "1px solid rgba(239,68,68,0.25)" }}>
+                            haute
+                          </span>
+                        )}
+                      </li>
+                    )
+                  })}
                 </ul>
               )}
             </div>
-          </div>
 
-          {/* ── Mini pipeline ── */}
-          <div className="glass overflow-hidden">
-            <div className="px-6 py-4" style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
-              <h2 className="font-semibold" style={{ color: "#f1f5f9" }}>Pipeline par étape</h2>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5" style={{ borderTop: "none" }}>
-              {pipeline.map((p, i) => {
-                const pct = pipelineTotal > 0 ? Math.round((p.ca / pipelineTotal) * 100) : 0
-                return (
-                  <div
-                    key={p.etape}
-                    className="px-5 py-5 flex flex-col gap-2"
-                    style={{ borderRight: i < ETAPES_PIPELINE.length - 1 ? "1px solid rgba(255,255,255,0.06)" : "none" }}
-                  >
-                    <span style={{ fontSize: "11px", color: "rgba(255,255,255,0.4)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                      {p.etape}
-                    </span>
-                    <p style={{ fontSize: "24px", fontWeight: 800, color: "#f1f5f9" }}>{p.affaires}</p>
-                    <p className="text-sm font-medium" style={{ color: "rgba(255,255,255,0.55)" }}>{fmt(p.ca)}</p>
-                    <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.08)" }}>
-                      <div
-                        className={`h-full rounded-full bg-gradient-to-r ${PIPELINE_GRADIENTS[i]} transition-all duration-700`}
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                    <span className="text-xs" style={{ color: "rgba(255,255,255,0.35)" }}>{pct}% du pipe</span>
-                  </div>
-                )
-              })}
+            {/* Agenda proche */}
+            <div className="glass overflow-hidden">
+              <div className="px-6 py-4 flex items-center gap-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
+                <CalendarDays size={16} style={{ color: "#6366f1" }} />
+                <h2 className="font-semibold" style={{ color: "#f1f5f9" }}>Agenda proche</h2>
+                <span className="text-xs ml-1" style={{ color: "rgba(255,255,255,0.3)" }}>J · J+1 · J+2</span>
+              </div>
+              {evenements.length === 0 ? (
+                <p className="p-6 text-sm text-center" style={{ color: "rgba(255,255,255,0.3)" }}>
+                  Aucun RDV à venir
+                </p>
+              ) : (
+                <ul className="divide-y" style={{ "--tw-divide-opacity": 1 } as React.CSSProperties}>
+                  {evenements.map((evt) => {
+                    const dateObj = new Date(evt.date_debut)
+                    const heure   = dateObj.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })
+                    const jour    = labelJour(evt.date_debut, todayStr)
+                    const type    = evt.type_evenement?.toLowerCase() ?? "autre"
+                    return (
+                      <li key={evt.id} className="px-6 py-4 flex items-start gap-4" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
+                        {/* Heure + jour */}
+                        <div className="shrink-0 w-20 text-right">
+                          <p className="text-xs font-semibold" style={{ color: "#a5b4fc" }}>{jour}</p>
+                          <p className="text-xs flex items-center justify-end gap-1 mt-0.5" style={{ color: "rgba(255,255,255,0.4)" }}>
+                            <Clock size={10} /> {heure}
+                          </p>
+                        </div>
+                        {/* Contenu */}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold leading-snug" style={{ color: "#f1f5f9" }}>{evt.titre}</p>
+                          {evt.affaire_nom && (
+                            <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.4)" }}>{evt.affaire_nom}</p>
+                          )}
+                        </div>
+                        {/* Badge type */}
+                        {evt.type_evenement && (
+                          <span className={`shrink-0 text-[11px] px-2 py-0.5 rounded-full border font-medium ${TYPE_EVT_BADGE[type] ?? TYPE_EVT_BADGE.autre}`}>
+                            {evt.type_evenement}
+                          </span>
+                        )}
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
             </div>
           </div>
 

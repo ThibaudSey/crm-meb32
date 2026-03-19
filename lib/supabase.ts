@@ -26,11 +26,13 @@ try {
   // Fallback no-op client for build-time SSR without env vars
   _client = {
     from: () => ({
-      select: () => Promise.resolve({ data: [], error: null }),
+      select: () => ({ eq: () => ({ order: () => Promise.resolve({ data: [], error: null }) }), order: () => ({ limit: () => Promise.resolve({ data: [], error: null }) }) }),
       insert: () => Promise.resolve({ data: null, error: null }),
-      update: () => Promise.resolve({ data: null, error: null }),
-      delete: () => Promise.resolve({ data: null, error: null }),
+      update: () => ({ eq: () => Promise.resolve({ data: null, error: null }) }),
+      delete: () => ({ eq: () => Promise.resolve({ data: null, error: null }) }),
       upsert: () => Promise.resolve({ data: null, error: null }),
+      eq: () => Promise.resolve({ data: [], error: null }),
+      order: () => Promise.resolve({ data: [], error: null }),
     }),
     auth: { getSession: () => Promise.resolve({ data: { session: null }, error: null }) },
   } as unknown as SupabaseClient

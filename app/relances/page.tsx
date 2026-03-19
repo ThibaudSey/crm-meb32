@@ -68,13 +68,16 @@ function addDays(dateStr: string, days: number): string {
 
 function devisToRelance(d: Devis): RelanceItem {
   const jours = joursDepuisDate(d.date_envoi!)
+  // d.client et d.concurrent n'existent pas dans le schéma — on utilise reference et notes
+  const dAny = d as unknown as Record<string, string | null>
+  const structure = dAny.client ?? dAny.affaire_nom ?? d.reference ?? "—"
   return {
     id:          d.id,
-    structure:   d.client,
+    structure,
     contexte:    `Devis ${d.reference} envoyé il y a ${jours} jours sans retour`,
     joursDepuis: jours,
     devisRef:    d.reference,
-    concurrent:  d.concurrent ?? null,
+    concurrent:  dAny.concurrent ?? null,
     priorite:    computePriorite(jours),
     aRelancerLe: addDays(d.date_envoi!, 7),
   }
@@ -210,15 +213,23 @@ export default function RelancesPage() {
         .from('devis')
         .select('*')
         .order('date_envoi', { ascending: true })
-      if (fetchError) throw fetchError
 
-      const devisList: Devis[] = data || []
+      if (fetchError) {
+        console.error("[relances] table 'devis':", fetchError)
+        // Table absente ou erreur réseau → liste vide, pas d'écran rouge
+        setRelances([])
+        return
+      }
+
+      const devisList: Devis[] = data ?? []
       const items = devisList
         .filter(d => d.statut === 'envoye' && d.date_envoi != null && joursDepuisDate(d.date_envoi) >= 7)
         .map(devisToRelance)
       setRelances(items)
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Erreur inconnue')
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error("[relances] fetchData exception:", msg)
+      setError(msg)
     } finally {
       setLoading(false)
     }
