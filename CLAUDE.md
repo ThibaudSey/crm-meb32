@@ -11,13 +11,28 @@
 - Deployment: Vercel (auto from GitHub)
 
 ## SUPABASE TABLES (NOMS EXACTS — CRITIQUE!)
-- "Affaires" (sales pipeline)
-- "Devis MEB" (quotes)
-- "Prospects" (leads)
-- "Relances" (follow-ups)
-- "Planning" (calendar)
-- "Dépenses" (expenses/mileage)
 
+### Tables principales
+- `affaires` (sales pipeline)
+- `devis` (quotes)
+- `devis_lots` (quote line items)
+- `devis_fournisseurs` (supplier quotes)
+- `contacts` (leads/prospects)
+- `evenements` (calendar/planning)
+- `frais` (expenses)
+- `km_entrees` (mileage)
+
+### Tables utilitaires
+- `taches` (tasks)
+- `batiments` (facilities)
+- `affaire_contacts` (relationship affaires→contacts)
+- `fournisseurs` (suppliers)
+- `ai_suggestions` (AI-generated insights)
+- `inbox` (notifications)
+
+⚠️ CRITICAL: Les noms de tables sont en snake_case
+→ Utilise les noms EXACTS avec les underscores
+→ Pas d'accents, pas d'espaces
 ⚠️ CRITICAL: Table names have accents/spaces
 → Must match EXACTLY in .from() calls
 → Use: SELECT * FROM information_schema.tables to verify
