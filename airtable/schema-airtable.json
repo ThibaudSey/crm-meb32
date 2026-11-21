@@ -1,0 +1,1567 @@
+[
+ {
+  "table": "Clients",
+  "id": "tbluKrNvsonlJ21rC",
+  "fields": [
+   {
+    "name": "Nom du client",
+    "id": "fldnVvmkxl08jkqyS",
+    "type": "singleLineText"
+   },
+   {
+    "name": "Contact",
+    "id": "fldPNkFE0Tm3qFgzy",
+    "type": "singleLineText"
+   },
+   {
+    "name": "Téléphone",
+    "id": "fldOqHiG3lOaeSGUV",
+    "type": "phoneNumber"
+   },
+   {
+    "name": "Email",
+    "id": "fldWh1BYz7RAZbkLC",
+    "type": "email"
+   },
+   {
+    "name": "Adresse",
+    "id": "fldHbtycETVkYOVY1",
+    "type": "multilineText"
+   },
+   {
+    "name": "Chantiers",
+    "id": "fldhYnPRaNkzFaTR4",
+    "type": "multipleRecordLinks",
+    "linkedTableId": "tbleMDpGCS2MasQGg"
+   },
+   {
+    "name": "Commandes fournisseurs (ancien lien)",
+    "id": "fldeNaB949HxvmbSm",
+    "type": "multipleRecordLinks",
+    "linkedTableId": "tblJH5vfiClI0nQeM"
+   },
+   {
+    "name": "Affaires",
+    "id": "flddozCYWvx4cnN1M",
+    "type": "multipleRecordLinks",
+    "linkedTableId": "tblaDygyqq8tI4QsN"
+   },
+   {
+    "name": "Contacts",
+    "id": "fldcKVgoqWbvD91wR",
+    "type": "multipleRecordLinks",
+    "linkedTableId": "tblGAGgdKomJqAwuA"
+   },
+   {
+    "name": "Type de client",
+    "id": "fldwKdc7PD5GGLv85",
+    "type": "singleSelect",
+    "choices": [
+     "Éleveur",
+     "OP / Groupement",
+     "Intégrateur",
+     "Entreprise",
+     "Autre"
+    ]
+   },
+   {
+    "name": "Code postal",
+    "id": "fldcPd8YBJFI4LXvb",
+    "type": "singleLineText"
+   },
+   {
+    "name": "Commune",
+    "id": "fldyAHCHdkASKQQx7",
+    "type": "singleLineText"
+   },
+   {
+    "name": "Notes",
+    "id": "fldtUoHvi9s5OBmZv",
+    "type": "multilineText"
+   }
+  ]
+ },
+ {
+  "table": "Fournisseurs",
+  "id": "tblaJWIshKMr9SkwU",
+  "fields": [
+   {
+    "name": "Nom du fournisseur",
+    "id": "fldOYD51wvLq8B36H",
+    "type": "singleLineText"
+   },
+   {
+    "name": "Contact",
+    "id": "fldqtoWYkk3XaHsrG",
+    "type": "singleLineText"
+   },
+   {
+    "name": "Téléphone",
+    "id": "fld7BPGyIHlE1PUdx",
+    "type": "phoneNumber"
+   },
+   {
+    "name": "Ville",
+    "id": "fldHYiuR2FI05CXtu",
+    "type": "singleLineText"
+   },
+   {
+    "name": "Code Postal",
+    "id": "fldEQMIaCBCzNIXuN",
+    "type": "number"
+   },
+   {
+    "name": "Articles",
+    "id": "flduAKPXEHn6cb0pT",
+    "type": "singleLineText"
+   },
+   {
+    "name": "Articles (catalogue)",
+    "id": "fld8IO2W99gThNlEy",
+    "type": "multipleRecordLinks",
+    "linkedTableId": "tblYlpYft81B9ucky"
+   },
+   {
+    "name": "Délai de commande",
+    "id": "fldNkY8GSRBRKAejd",
+    "type": "number"
+   },
+   {
+    "name": "Commandes fournisseurs",
+    "id": "fld1hikiqD7Btehvb",
+    "type": "multipleRecordLinks",
+    "linkedTableId": "tblJH5vfiClI0nQeM"
+   }
+  ]
+ },
+ {
+  "table": "Articles",
+  "id": "tblYlpYft81B9ucky",
+  "fields": [
+   {
+    "name": "Nom de l'article",
+    "id": "fldWR2V0RQ8LtlYyt",
+    "type": "singleLineText"
+   },
+   {
+    "name": "Référence",
+    "id": "fldXlu3kA0fQTY3hH",
+    "type": "singleLineText"
+   },
+   {
+    "name": "Fournisseur (lien)",
+    "id": "fldeZcVn6czWjJtkK",
+    "type": "multipleRecordLinks",
+    "linkedTableId": "tblaJWIshKMr9SkwU"
+   },
+   {
+    "name": "Prix unitaire",
+    "id": "fld8TVD7x7T4JIK5p",
+    "type": "currency"
+   },
+   {
+    "name": "Description",
+    "id": "fld4bSwiUWFWmIaWh",
+    "type": "multilineText"
+   },
+   {
+    "name": "Commandes fournisseurs",
+    "id": "fld8aiRoGke76uOSN",
+    "type": "multipleRecordLinks",
+    "linkedTableId": "tblJH5vfiClI0nQeM"
+   },
+   {
+    "name": "Lignes de commande",
+    "id": "fld09BXLcKwqGW8rP",
+    "type": "multipleRecordLinks",
+    "linkedTableId": "tblGzhoKEglgumQio"
+   }
+  ]
+ },
+ {
+  "table": "Chantiers",
+  "id": "tbleMDpGCS2MasQGg",
+  "fields": [
+   {
+    "name": "Nom du chantier",
+    "id": "fldOC8Lif0GIkukM5",
+    "type": "singleLineText"
+   },
+   {
+    "name": "Client",
+    "id": "fld203KMrZHw38nsP",
+    "type": "multipleRecordLinks",
+    "linkedTableId": "tbluKrNvsonlJ21rC"
+   },
+   {
+    "name": "Date d'échéance",
+    "id": "flduOrZWa8cIbQRzi",
+    "type": "date"
+   },
+   {
+    "name": "Notes",
+    "id": "fldeBuVRicHW3ew9s",
+    "type": "multilineText"
+   },
+   {
+    "name": "Commandes fournisseurs",
+    "id": "fldTqLMWDlZE568Vj",
+    "type": "multipleRecordLinks",
+    "linkedTableId": "tblJH5vfiClI0nQeM"
+   },
+   {
+    "name": "Tâches",
+    "id": "fldrIsVKpoi5P61Lc",
+    "type": "multipleRecordLinks",
+    "linkedTableId": "tbld8j4xY9xkh0Vgg"
+   },
+   {
+    "name": "Nombre de commandes clients",
+    "id": "fldFLDpQ8ApE6bYXq",
+    "type": "count"
+   },
+   {
+    "name": "Urgence la plus élevée (Tâches)",
+    "id": "flduxN67GPnmNGV6N",
+    "type": "rollup"
+   },
+   {
+    "name": "Date de début de chantier",
+    "id": "flduotuX0QN7lTXdN",
+    "type": "date"
+   },
+   {
+    "name": "Terminé",
+    "id": "fld0gKhn4Yr2kxbs6",
+    "type": "checkbox"
+   },
+   {
+    "name": "Date de fin de chantier",
+    "id": "fldE3zDNRIDwvpXAB",
+    "type": "date"
+   },
+   {
+    "name": "Statut calculé",
+    "id": "fldzmOM2Q0pzquaIQ",
+    "type": "formula",
+    "formula": "IF(\n  DATETIME_DIFF({flduotuX0QN7lTXdN}, TODAY(), 'days') <= 0,\n    \"En cours\",\n    IF(\n        DATETIME_DIFF({flduotuX0QN7lTXdN}, TODAY(), 'days') <= 7,\n        \"Urgent\",\n        IF(\n            DATETIME_DIFF({flduotuX0QN7lTXdN}, TODAY(), 'days') <= 15,\n            \"Imminent\",\n            \"Planifié\"\n        )\n    )\n)"
+   },
+   {
+    "name": "Statut",
+    "id": "fldMDOurrNjenA54k",
+    "type": "singleSelect",
+    "choices": [
+     "Urgent",
+     "Planifié",
+     "Imminent",
+     "En cours",
+     "Terminé"
+    ]
+   },
+   {
+    "name": "Affaires",
+    "id": "fldtqjSPBY8LHI2Bu",
+    "type": "multipleRecordLinks",
+    "linkedTableId": "tblaDygyqq8tI4QsN"
+   },
+   {
+    "name": "Étapes chantier",
+    "id": "fld3ZgJEe4FfIzftp",
+    "type": "multipleRecordLinks",
+    "linkedTableId": "tbltGM8iubXMW3YgU"
+   }
+  ]
+ },
+ {
+  "table": "Commandes fournisseurs",
+  "id": "tblJH5vfiClI0nQeM",
+  "fields": [
+   {
+    "name": "Référence commande",
+    "id": "flddsoahSMJlxhvrL",
+    "type": "singleLineText"
+   },
+   {
+    "name": "Client (ancien)",
+    "id": "fldClF8vqwsozyMeg",
+    "type": "multipleRecordLinks",
+    "linkedTableId": "tbluKrNvsonlJ21rC"
+   },
+   {
+    "name": "Chantier",
+    "id": "fldLOnd2UfBpLxdKG",
+    "type": "multipleRecordLinks",
+    "linkedTableId": "tbleMDpGCS2MasQGg"
+   },
+   {
+    "name": "Article commandé (texte libre, ancien)",
+    "id": "fldVz2Cl1bc5Aby5x",
+    "type": "multilineText"
+   },
+   {
+    "name": "Date livraison prévue",
+    "id": "fldeHSr249lKGSBDz",
+    "type": "date"
+   },
+   {
+    "name": "Statut",
+    "id": "fld1ttj5C49rBGDoP",
+    "type": "singleSelect",
+    "choices": [
+     "En attente fournisseur",
+     "Commandée",
+     "Reçue",
+     "Livrée"
+    ]
+   },
+   {
+    "name": "Urgence",
+    "id": "fldEyvJAxyktfEAzm",
+    "type": "singleSelect",
+    "choices": [
+     "Urgent",
+     "Normal"
+    ]
+   },
+   {
+    "name": "Type de commande",
+    "id": "fldGBiB0ifoMx7fyU",
+    "type": "singleSelect",
+    "choices": [
+     "Commande client",
+     "Réassort dépôt"
+    ]
+   },
+   {
+    "name": "Articles (catalogue)",
+    "id": "fldvVRC9iB0Ct4JKX",
+    "type": "multipleRecordLinks",
+    "linkedTableId": "tblYlpYft81B9ucky"
+   },
+   {
+    "name": "Date commande prévue",
+    "id": "fldcFqsatQec8a47o",
+    "type": "date"
+   },
+   {
+    "name": "Commander",
+    "id": "fldGIUNKU5BkkVagO",
+    "type": "checkbox"
+   },
+   {
+    "name": "Date commande réelle",
+    "id": "fldz6D3ozOnarowrj",
+    "type": "date"
+   },
+   {
+    "name": "Reçue",
+    "id": "fldKIiMdFnorsTNAq",
+    "type": "checkbox"
+   },
+   {
+    "name": "Date livraison réelle",
+    "id": "fldk45QK4GZnLQu8m",
+    "type": "date"
+   },
+   {
+    "name": "Fournisseur",
+    "id": "fld0eBmDGoUCECKz4",
+    "type": "multipleRecordLinks",
+    "linkedTableId": "tblaJWIshKMr9SkwU"
+   },
+   {
+    "name": "Étapes chantier",
+    "id": "fld3dKAZyXWJUXE7s",
+    "type": "multipleRecordLinks",
+    "linkedTableId": "tbltGM8iubXMW3YgU"
+   },
+   {
+    "name": "Lignes de commande",
+    "id": "fldyIZCZx7TbR16e6",
+    "type": "multipleRecordLinks",
+    "linkedTableId": "tblGzhoKEglgumQio"
+   },
+   {
+    "name": "Affaire",
+    "id": "fldF9QGFx1MSoeUyr",
+    "type": "multipleRecordLinks",
+    "linkedTableId": "tblaDygyqq8tI4QsN"
+   },
+   {
+    "name": "Réf. commande fournisseur",
+    "id": "fldOWkdtsLyhe5uiG",
+    "type": "singleLineText"
+   },
+   {
+    "name": "Bloque le chantier",
+    "id": "fldUBLBHvPuHxR5QL",
+    "type": "checkbox"
+   },
+   {
+    "name": "Documents (BC, AR, BL)",
+    "id": "fldE0Ln19F7UzzNG2",
+    "type": "multipleAttachments"
+   },
+   {
+    "name": "Observations",
+    "id": "fldopzj8h4nOarvmz",
+    "type": "multilineText"
+   },
+   {
+    "name": "Qté commandée (total)",
+    "id": "fldBnzNT38TrKCpO7",
+    "type": "rollup"
+   },
+   {
+    "name": "Qté reçue (total)",
+    "id": "fldfStCF81THv4Mjm",
+    "type": "rollup"
+   },
+   {
+    "name": "Reste à recevoir (total)",
+    "id": "fldg55lnszDLUrYXa",
+    "type": "rollup"
+   },
+   {
+    "name": "Date travaux (affaire)",
+    "id": "fldELIyRuNGyNZqP2",
+    "type": "rollup"
+   },
+   {
+    "name": "Délai fournisseur (j)",
+    "id": "fldWRbnrt7rtMPAqx",
+    "type": "rollup"
+   },
+   {
+    "name": "Situation",
+    "id": "fld0c7xn4KCds7JRQ",
+    "type": "formula",
+    "formula": "IF({fldBnzNT38TrKCpO7}=0, IF({fldKIiMdFnorsTNAq},\"Reçue totalement\", IF(OR({fldGIUNKU5BkkVagO},{fldz6D3ozOnarowrj}),\"Commandée – attendue\",\"À commander\")), IF({fldg55lnszDLUrYXa}<=0,\"Reçue totalement\", IF({fldfStCF81THv4Mjm}>0,\"Reçue partiellement\", IF(OR({fldGIUNKU5BkkVagO},{fldz6D3ozOnarowrj}),\"Commandée – attendue\",\"À commander\"))))"
+   },
+   {
+    "name": "Commander au plus tard",
+    "id": "fldk5fjgZBL68Jxx2",
+    "type": "formula",
+    "formula": "IF(AND({fldELIyRuNGyNZqP2},{fldWRbnrt7rtMPAqx}), DATEADD({fldELIyRuNGyNZqP2}, -({fldWRbnrt7rtMPAqx}+7), \"days\"))"
+   },
+   {
+    "name": "Alerte",
+    "id": "fld2GgDt4C8DDGcPK",
+    "type": "formula",
+    "formula": "IF(AND({fld0c7xn4KCds7JRQ}=\"À commander\",{fldk5fjgZBL68Jxx2},IS_BEFORE({fldk5fjgZBL68Jxx2},DATEADD(TODAY(),7,\"days\"))),\"⚠ À commander d'urgence\", IF(AND({fld0c7xn4KCds7JRQ}!=\"Reçue totalement\",{fldeHSr249lKGSBDz},IS_BEFORE({fldeHSr249lKGSBDz},TODAY())),\"⚠ Livraison en retard\", IF(AND({fld0c7xn4KCds7JRQ}!=\"Reçue totalement\",{fldELIyRuNGyNZqP2},{fldeHSr249lKGSBDz},IS_AFTER({fldeHSr249lKGSBDz},DATEADD({fldELIyRuNGyNZqP2},-3,\"days\"))),\"⚠ Livraison trop proche des travaux\", IF(AND({fld0c7xn4KCds7JRQ}!=\"Reçue totalement\",{fld0c7xn4KCds7JRQ}!=\"À commander\",{fldELIyRuNGyNZqP2},NOT({fldeHSr249lKGSBDz})),\"⚠ Date de livraison inconnue\", IF({fldUBLBHvPuHxR5QL},\"⛔ Bloque le chantier\",\"\")))))"
+   },
+   {
+    "name": "Non reçue",
+    "id": "fldKhsK8nVyQvoqpz",
+    "type": "formula",
+    "formula": "IF({fld0c7xn4KCds7JRQ}=\"Reçue totalement\",0,1)"
+   }
+  ]
+ },
+ {
+  "table": "Tâches",
+  "id": "tbld8j4xY9xkh0Vgg",
+  "fields": [
+   {
+    "name": "Intitulé",
+    "id": "fldlgoV0lmKUNBd9W",
+    "type": "singleLineText"
+   },
+   {
+    "name": "Chantier",
+    "id": "fldGOvPD0ClNSUHoG",
+    "type": "multipleRecordLinks",
+    "linkedTableId": "tbleMDpGCS2MasQGg"
+   },
+   {
+    "name": "Échéance",
+    "id": "fldQTqH70RBWsjjmx",
+    "type": "date"
+   },
+   {
+    "name": "Urgence (ancien)",
+    "id": "fld1iPbtYTbJIWSoX",
+    "type": "singleSelect",
+    "choices": [
+     "Urgent",
+     "Normal"
+    ]
+   },
+   {
+    "name": "Fait",
+    "id": "fldScsh4vEE52OxzE",
+    "type": "checkbox"
+   },
+   {
+    "name": "Comptes rendus",
+    "id": "fldvyOMCney7yw4Eo",
+    "type": "multipleRecordLinks",
+    "linkedTableId": "tblBXqrNYWQnWDKie"
+   },
+   {
+    "name": "Affaire",
+    "id": "fldUCjehSHHXKxGCH",
+    "type": "multipleRecordLinks",
+    "linkedTableId": "tblaDygyqq8tI4QsN"
+   },
+   {
+    "name": "Responsable",
+    "id": "fldmRvmE6oMrAd1RT",
+    "type": "singleSelect",
+    "choices": [
+     "Thibaud",
+     "Cédric",
+     "Autre"
+    ]
+   },
+   {
+    "name": "État",
+    "id": "fldNT7hpuHcWXAXJR",
+    "type": "singleSelect",
+    "choices": [
+     "À faire",
+     "En cours",
+     "En attente",
+     "Fait"
+    ]
+   },
+   {
+    "name": "Urgent",
+    "id": "fldqvdk7B1kHPfYy7",
+    "type": "checkbox"
+   },
+   {
+    "name": "Demi-journée",
+    "id": "fldxFA3hLYxu5UFEr",
+    "type": "checkbox"
+   },
+   {
+    "name": "Commentaire",
+    "id": "fldIXZqldEvsBYfpm",
+    "type": "multilineText"
+   },
+   {
+    "name": "Source",
+    "id": "fld8QAQxHInBgaQ7t",
+    "type": "singleSelect",
+    "choices": [
+     "Manuel",
+     "Compte rendu RDV",
+     "Contrôle dossier",
+     "Automatique"
+    ]
+   },
+   {
+    "name": "Fait le",
+    "id": "fldQv6Rb35C21dAWe",
+    "type": "dateTime"
+   },
+   {
+    "name": "Priorité",
+    "id": "fldNu1Poccrf0F29V",
+    "type": "formula",
+    "formula": "IF({fldScsh4vEE52OxzE},0, IF({fldqvdk7B1kHPfYy7},4,0) + IF({fldxFA3hLYxu5UFEr},2,0) + IF(AND({fldQTqH70RBWsjjmx},IS_BEFORE({fldQTqH70RBWsjjmx},DATEADD(TODAY(),1,\"days\"))),3,0) + IF(AND({fldQTqH70RBWsjjmx},IS_BEFORE({fldQTqH70RBWsjjmx},DATEADD(TODAY(),3,\"days\"))),1,0))"
+   },
+   {
+    "name": "En retard",
+    "id": "fldUEgZxrRV7BuRy5",
+    "type": "formula",
+    "formula": "IF(AND(NOT({fldScsh4vEE52OxzE}),{fldQTqH70RBWsjjmx},IS_BEFORE({fldQTqH70RBWsjjmx},TODAY())),\"⚠ En retard\",\"\")"
+   }
+  ]
+ },
+ {
+  "table": "Affaires",
+  "id": "tblaDygyqq8tI4QsN",
+  "fields": [
+   {
+    "name": "Nom affaire",
+    "id": "fldno6IhndQRgS2lk",
+    "type": "singleLineText"
+   },
+   {
+    "name": "Date demande",
+    "id": "fldmiMGZKauxPtQDJ",
+    "type": "date"
+   },
+   {
+    "name": "Origine demande",
+    "id": "fldHoArGsQQX12utv",
+    "type": "singleSelect",
+    "choices": [
+     "Téléphone",
+     "E-mail",
+     "Visite / RDV",
+     "OP / Intégrateur",
+     "Salon",
+     "Autre"
+    ]
+   },
+   {
+    "name": "Site / bâtiment",
+    "id": "fldYnhcOmgP7WT3NH",
+    "type": "singleLineText"
+   },
+   {
+    "name": "Adresse du bâtiment",
+    "id": "fldfspWvmJtlzFbZ1",
+    "type": "multilineText"
+   },
+   {
+    "name": "Code postal",
+    "id": "fldzv0VeHgY38j8pP",
+    "type": "singleLineText"
+   },
+   {
+    "name": "Commune",
+    "id": "fld6zn7NXYI79p0HC",
+    "type": "singleLineText"
+   },
+   {
+    "name": "Type de production",
+    "id": "fld3byYD1nJlJNrOp",
+    "type": "singleSelect",
+    "choices": [
+     "PDQ",
+     "Label",
+     "Poules pondeuses",
+     "Canards",
+     "Autre"
+    ]
+   },
+   {
+    "name": "Familles d’équipements",
+    "id": "fld7RZQfys689yGak",
+    "type": "multipleSelects",
+    "choices": [
+     "Ventilation",
+     "Chauffage",
+     "Brumisation / refroidissement",
+     "Abreuvement",
+     "Alimentation",
+     "Éclairage",
+     "Régulation / télémétrie",
+     "Pesage",
+     "Bâtiment / gros œuvre",
+     "Autre"
+    ]
+   },
+   {
+    "name": "Description du besoin",
+    "id": "fldHgGvFjtGhU7LBB",
+    "type": "multilineText"
+   },
+   {
+    "name": "Responsable",
+    "id": "fldXDMEajKQK8SWjG",
+    "type": "singleSelect",
+    "choices": [
+     "Thibaud",
+     "Cédric",
+     "Autre"
+    ]
+   },
+   {
+    "name": "Statut commercial",
+    "id": "fldXu3DH9KpNqHoaO",
+    "type": "singleSelect",
+    "choices": [
+     "1. Demande reçue",
+     "2. RDV / visite",
+     "3. Étude & chiffrage",
+     "4. Devis envoyé",
+     "5. Négociation / modification",
+     "6. Signé – dossier à compléter",
+     "7. Prêt à transmettre",
+     "8. Transmis à Cédric",
+     "9. Pris en charge par Cédric",
+     "Reporté",
+     "Perdu",
+     "Abandonné"
+    ]
+   },
+   {
+    "name": "Prochaine action",
+    "id": "fld789LL0KyuyfZAw",
+    "type": "singleSelect",
+    "choices": [
+     "Organiser RDV",
+     "Réaliser RDV / visite",
+     "Étude technique & chiffrage",
+     "Préparer devis",
+     "Modifier devis",
+     "Organiser présentation devis",
+     "Présenter devis",
+     "Relancer",
+     "Compléter dossier",
+     "Transmettre à Cédric",
+     "Aucune",
+     "Autre"
+    ]
+   },
+   {
+    "name": "Prochaine action – détail",
+    "id": "fldThrAtNaHfdV85o",
+    "type": "singleLineText"
+   },
+   {
+    "name": "Échéance prochaine action",
+    "id": "fldQead6UsjSBKytd",
+    "type": "date"
+   },
+   {
+    "name": "En attente de",
+    "id": "fldYUm6iobMoWVZu1",
+    "type": "singleSelect",
+    "choices": [
+     "Personne",
+     "Client",
+     "OP / Intégrateur",
+     "Fournisseur",
+     "Interne MEB32"
+    ]
+   },
+   {
+    "name": "Attente – détail",
+    "id": "flddvuDuYjCgLR79Y",
+    "type": "singleLineText"
+   },
+   {
+    "name": "Relancer le",
+    "id": "fldEXcJZecXGJkayJ",
+    "type": "date"
+   },
+   {
+    "name": "Bloqué",
+    "id": "fldBY6bKkndTN3P3k",
+    "type": "checkbox"
+   },
+   {
+    "name": "Motif de blocage",
+    "id": "fldKaiY3Pp4IFggdK",
+    "type": "singleLineText"
+   },
+   {
+    "name": "Date travaux prévue",
+    "id": "fldT4aD6tDnmBm97C",
+    "type": "date"
+   },
+   {
+    "name": "Date travaux confirmée",
+    "id": "fldoREN7gO5ikYRye",
+    "type": "checkbox"
+   },
+   {
+    "name": "Documents accessibles (OneDrive)",
+    "id": "fldzla2YruO0LjQD1",
+    "type": "checkbox"
+   },
+   {
+    "name": "Dossier OneDrive",
+    "id": "fldH98vrK80DMojMQ",
+    "type": "url"
+   },
+   {
+    "name": "Statut contrôle dossier",
+    "id": "fldPWnsCXN25toxAp",
+    "type": "singleSelect",
+    "choices": [
+     "Non contrôlé",
+     "À compléter",
+     "Complet – à valider",
+     "Validé"
+    ]
+   },
+   {
+    "name": "Dernier contrôle",
+    "id": "fldVENJv53igJmXnx",
+    "type": "dateTime"
+   },
+   {
+    "name": "Synthèse du contrôle",
+    "id": "fld9qI9hTzcIUCLcc",
+    "type": "multilineText"
+   },
+   {
+    "name": "Demande de transmission",
+    "id": "fldzWH4ofzNSqlU6p",
+    "type": "checkbox"
+   },
+   {
+    "name": "Message transmission",
+    "id": "fldBwdKutPha0C8op",
+    "type": "multilineText"
+   },
+   {
+    "name": "Date prêt à transmettre",
+    "id": "fldceDfzzY8L7rwYX",
+    "type": "dateTime"
+   },
+   {
+    "name": "Date transmission",
+    "id": "fldai0idNmnAXMaRm",
+    "type": "dateTime"
+   },
+   {
+    "name": "Transmis par",
+    "id": "fldZ5XcSGpSiuOfHL",
+    "type": "singleSelect",
+    "choices": [
+     "Thibaud",
+     "Cédric",
+     "Autre"
+    ]
+   },
+   {
+    "name": "Date prise en charge",
+    "id": "fldAtw28UxJXsKD77",
+    "type": "dateTime"
+   },
+   {
+    "name": "Pris en charge par",
+    "id": "fldFxT3jFOhSyzzwq",
+    "type": "singleSelect",
+    "choices": [
+     "Thibaud",
+     "Cédric",
+     "Autre"
+    ]
+   },
+   {
+    "name": "Notes",
+    "id": "fldZztPGohe2THgGI",
+    "type": "multilineText"
+   },
+   {
+    "name": "Client",
+    "id": "fldRGat3779OWVfCn",
+    "type": "multipleRecordLinks",
+    "linkedTableId": "tbluKrNvsonlJ21rC"
+   },
+   {
+    "name": "Contact principal",
+    "id": "fldXUkvvZgr5IbIA9",
+    "type": "multipleRecordLinks",
+    "linkedTableId": "tblGAGgdKomJqAwuA"
+   },
+   {
+    "name": "Retour attendu de",
+    "id": "fldikbaCDfB27uQm3",
+    "type": "multipleRecordLinks",
+    "linkedTableId": "tblGAGgdKomJqAwuA"
+   },
+   {
+    "name": "Chantier",
+    "id": "fldHAq3tOpwIv7C2Z",
+    "type": "multipleRecordLinks",
+    "linkedTableId": "tbleMDpGCS2MasQGg"
+   },
+   {
+    "name": "Devis",
+    "id": "fldM9cCDOKPCyyCop",
+    "type": "multipleRecordLinks",
+    "linkedTableId": "tblETCIqzzM9XgSj8"
+   },
+   {
+    "name": "Documents",
+    "id": "fldXp4tJ1YBS6JT5k",
+    "type": "multipleRecordLinks",
+    "linkedTableId": "tblzQIctMVccwYzVK"
+   },
+   {
+    "name": "Comptes rendus",
+    "id": "fldHPaIsaMmx9q87E",
+    "type": "multipleRecordLinks",
+    "linkedTableId": "tblBXqrNYWQnWDKie"
+   },
+   {
+    "name": "Critères dossier",
+    "id": "fldsFQjQvzLdnhlFN",
+    "type": "multipleRecordLinks",
+    "linkedTableId": "tblXMcQ0eC577gu3u"
+   },
+   {
+    "name": "Tâches",
+    "id": "fldGmHihCm62VOLOm",
+    "type": "multipleRecordLinks",
+    "linkedTableId": "tbld8j4xY9xkh0Vgg"
+   },
+   {
+    "name": "Commandes fournisseurs",
+    "id": "fldpF31nRltTlMlOV",
+    "type": "multipleRecordLinks",
+    "linkedTableId": "tblJH5vfiClI0nQeM"
+   },
+   {
+    "name": "Nb critères",
+    "id": "fldTidZ5wYecml2ja",
+    "type": "rollup"
+   },
+   {
+    "name": "Nb critères bloquants",
+    "id": "fldhAhPxRfQD9EIMH",
+    "type": "rollup"
+   },
+   {
+    "name": "Points bloquants (critères)",
+    "id": "fld5T2xo076M5tAoh",
+    "type": "rollup"
+   },
+   {
+    "name": "Devis signés valides",
+    "id": "fldWjiExz6cwhkLqR",
+    "type": "rollup"
+   },
+   {
+    "name": "Nb versions devis",
+    "id": "fldnCnzrE7bvjlIB2",
+    "type": "rollup"
+   },
+   {
+    "name": "Conditions manquantes",
+    "id": "fldr3aDz6OXJTpuPQ",
+    "type": "formula",
+    "formula": "TRIM(IF({fldWjiExz6cwhkLqR}>=1,\"\",\"• Aucun devis signé (version acceptée + PDF signé joint)\\n\") & IF(AND({fldT4aD6tDnmBm97C},{fldoREN7gO5ikYRye}),\"\",\"• Date des travaux non fixée ou non confirmée\\n\") & IF({fldTidZ5wYecml2ja}=0,\"• Contrôle du dossier non réalisé (aucun critère)\\n\",IF({fldhAhPxRfQD9EIMH}>0,\"• \"&{fldhAhPxRfQD9EIMH}&\" critère(s) obligatoire(s) non validé(s)\\n\",\"\")) & IF({fldzla2YruO0LjQD1},\"\",\"• Documents non confirmés accessibles\\n\"))"
+   },
+   {
+    "name": "Transmissible",
+    "id": "fldi6MtUBuLzzYCYy",
+    "type": "formula",
+    "formula": "IF({fldr3aDz6OXJTpuPQ}=\"\",1,0)"
+   },
+   {
+    "name": "Clé anti-doublon",
+    "id": "fldXceJWVKJMb9KKI",
+    "type": "formula",
+    "formula": "LOWER(SUBSTITUTE(SUBSTITUTE({fldRGat3779OWVfCn}&\"|\"&{fldYnhcOmgP7WT3NH}&\"|\"&{fldzv0VeHgY38j8pP},\" \",\"\"),\"-\",\"\"))"
+   },
+   {
+    "name": "Priorité Thibaud",
+    "id": "flde3oPiZObAU2Mlg",
+    "type": "formula",
+    "formula": "IF(OR({fldXu3DH9KpNqHoaO}=\"8. Transmis à Cédric\",{fldXu3DH9KpNqHoaO}=\"9. Pris en charge par Cédric\",{fldXu3DH9KpNqHoaO}=\"Perdu\",{fldXu3DH9KpNqHoaO}=\"Abandonné\"),\"\", IF({fldBY6bKkndTN3P3k},\"1 🔴 Bloqué\", IF(AND({fldQead6UsjSBKytd},IS_BEFORE({fldQead6UsjSBKytd},DATEADD(TODAY(),1,\"days\"))),\"2 🟠 Action due\", IF(AND({fldEXcJZecXGJkayJ},IS_BEFORE({fldEXcJZecXGJkayJ},DATEADD(TODAY(),1,\"days\"))),\"3 🟡 Relance due\", IF({fldXu3DH9KpNqHoaO}=\"Reporté\",\"6 ⏸ Reporté\", IF(AND({fldYUm6iobMoWVZu1},{fldYUm6iobMoWVZu1}!=\"Personne\"),\"4 ⏳ Attente tiers\",\"5 🟢 Planifié\"))))))"
+   },
+   {
+    "name": "Lancer le contrôle",
+    "id": "fldJ1uHaQ8SxlBXGB",
+    "type": "checkbox"
+   },
+   {
+    "name": "Alerte doublon",
+    "id": "fldLKe8DhtaQ4yz0r",
+    "type": "singleLineText"
+   }
+  ]
+ },
+ {
+  "table": "Contacts",
+  "id": "tblGAGgdKomJqAwuA",
+  "fields": [
+   {
+    "name": "Nom",
+    "id": "fldpklkQHtDRacpkn",
+    "type": "singleLineText"
+   },
+   {
+    "name": "Rôle",
+    "id": "fld5GaeP700z0NhTb",
+    "type": "singleSelect",
+    "choices": [
+     "Éleveur / gérant",
+     "Technicien OP",
+     "Intégrateur",
+     "Contact sur place",
+     "Conducteur de travaux",
+     "Fournisseur",
+     "Autre"
+    ]
+   },
+   {
+    "name": "Téléphone",
+    "id": "fldEAkpRlPyQ3iLzG",
+    "type": "phoneNumber"
+   },
+   {
+    "name": "E-mail",
+    "id": "fldlmB21bBJ28UgSq",
+    "type": "email"
+   },
+   {
+    "name": "Notes",
+    "id": "fldE3kaNTixsviJuU",
+    "type": "multilineText"
+   },
+   {
+    "name": "Affaires (contact principal)",
+    "id": "flduOfumI0U9trosA",
+    "type": "multipleRecordLinks",
+    "linkedTableId": "tblaDygyqq8tI4QsN"
+   },
+   {
+    "name": "Affaires (retour attendu)",
+    "id": "fldlT9HZA7SyWhsgB",
+    "type": "multipleRecordLinks",
+    "linkedTableId": "tblaDygyqq8tI4QsN"
+   },
+   {
+    "name": "Client",
+    "id": "fldKwquBkcbZv7tXJ",
+    "type": "multipleRecordLinks",
+    "linkedTableId": "tbluKrNvsonlJ21rC"
+   }
+  ]
+ },
+ {
+  "table": "Devis",
+  "id": "tblETCIqzzM9XgSj8",
+  "fields": [
+   {
+    "name": "Référence Batigest",
+    "id": "fldZsdnZQdNVs4bd7",
+    "type": "singleLineText"
+   },
+   {
+    "name": "Version",
+    "id": "fldNzYuMqwSXkQDQN",
+    "type": "number"
+   },
+   {
+    "name": "Date devis",
+    "id": "fld8ZD8fZdY72f80W",
+    "type": "date"
+   },
+   {
+    "name": "Montant HT",
+    "id": "fldXkLpNWsHufUPTF",
+    "type": "currency"
+   },
+   {
+    "name": "Date envoi",
+    "id": "fldftw067qmffQEFm",
+    "type": "date"
+   },
+   {
+    "name": "État",
+    "id": "fldl44qDfcCceXtXi",
+    "type": "singleSelect",
+    "choices": [
+     "Brouillon",
+     "Envoyé",
+     "Présenté",
+     "En négociation",
+     "Remplacé (archive)",
+     "Signé / accepté",
+     "Refusé"
+    ]
+   },
+   {
+    "name": "Version acceptée",
+    "id": "fldZ4H9q2F5LNx2Us",
+    "type": "checkbox"
+   },
+   {
+    "name": "PDF devis",
+    "id": "fldx47ImAnZKjACkn",
+    "type": "multipleAttachments"
+   },
+   {
+    "name": "Devis signé",
+    "id": "fldOn8L1D0fcrU13q",
+    "type": "multipleAttachments"
+   },
+   {
+    "name": "Date signature",
+    "id": "fldJQ5oUUKLodmQdv",
+    "type": "date"
+   },
+   {
+    "name": "Lien OneDrive",
+    "id": "fldLcn3pb3NI4bVXu",
+    "type": "url"
+   },
+   {
+    "name": "Notes",
+    "id": "fldhS2WB8GFZkPGo5",
+    "type": "multilineText"
+   },
+   {
+    "name": "Affaire",
+    "id": "fldB6pVwJyHBqSSni",
+    "type": "multipleRecordLinks",
+    "linkedTableId": "tblaDygyqq8tI4QsN"
+   },
+   {
+    "name": "Signé valide",
+    "id": "fldbmlCjXJlDDc1Ux",
+    "type": "formula",
+    "formula": "IF(AND({fldZ4H9q2F5LNx2Us},{fldOn8L1D0fcrU13q}),1,0)"
+   }
+  ]
+ },
+ {
+  "table": "Documents",
+  "id": "tblzQIctMVccwYzVK",
+  "fields": [
+   {
+    "name": "Nom",
+    "id": "fldH2FQXR7JaHfMW9",
+    "type": "singleLineText"
+   },
+   {
+    "name": "Type",
+    "id": "fldk9OheptqLwbt5W",
+    "type": "singleSelect",
+    "choices": [
+     "Plan",
+     "Fiche technique",
+     "Photo",
+     "Compte rendu",
+     "Bon de commande",
+     "Bon de livraison",
+     "Autre"
+    ]
+   },
+   {
+    "name": "Fichier",
+    "id": "fldcaKy5XrO2usUpJ",
+    "type": "multipleAttachments"
+   },
+   {
+    "name": "Lien OneDrive",
+    "id": "fldvurA0cgKiw3Plz",
+    "type": "url"
+   },
+   {
+    "name": "Notes",
+    "id": "fldHtJoq5XgFPhb6X",
+    "type": "multilineText"
+   },
+   {
+    "name": "Affaire",
+    "id": "fldCpdntFROecaNWg",
+    "type": "multipleRecordLinks",
+    "linkedTableId": "tblaDygyqq8tI4QsN"
+   }
+  ]
+ },
+ {
+  "table": "Comptes rendus",
+  "id": "tblBXqrNYWQnWDKie",
+  "fields": [
+   {
+    "name": "Titre",
+    "id": "flddB6MFcmlLGMkT5",
+    "type": "singleLineText"
+   },
+   {
+    "name": "Date RDV",
+    "id": "fldfVX59mbo9Lr8MW",
+    "type": "dateTime"
+   },
+   {
+    "name": "ID événement Google Calendar",
+    "id": "fldfsVFNz5KKQRrTt",
+    "type": "singleLineText"
+   },
+   {
+    "name": "Statut traitement",
+    "id": "fldR878JethCwcdo9",
+    "type": "singleSelect",
+    "choices": [
+     "À traiter",
+     "Traité",
+     "Ignoré"
+    ]
+   },
+   {
+    "name": "Notes brutes (dictée)",
+    "id": "fldFQfiF2deWWQoOP",
+    "type": "multilineText"
+   },
+   {
+    "name": "Compte rendu structuré",
+    "id": "flddRdFtjLa05JXd1",
+    "type": "multilineText"
+   },
+   {
+    "name": "Besoin client",
+    "id": "fldUAIorZ6svmELnt",
+    "type": "multilineText"
+   },
+   {
+    "name": "Caractéristiques techniques",
+    "id": "fldkdkKbfdMuyMvzC",
+    "type": "multilineText"
+   },
+   {
+    "name": "Décisions",
+    "id": "fldKB3xPKCeuOaxtg",
+    "type": "multilineText"
+   },
+   {
+    "name": "Informations manquantes",
+    "id": "fldfletu2QmnWnuie",
+    "type": "multilineText"
+   },
+   {
+    "name": "Actions extraites",
+    "id": "fldCeH4yyYJRKbrNe",
+    "type": "multilineText"
+   },
+   {
+    "name": "Traité le",
+    "id": "fldNlu8XpA3MA1hyq",
+    "type": "dateTime"
+   },
+   {
+    "name": "Affaire",
+    "id": "fldxHk3pJ2euRN4rc",
+    "type": "multipleRecordLinks",
+    "linkedTableId": "tblaDygyqq8tI4QsN"
+   },
+   {
+    "name": "Tâches créées",
+    "id": "fldmHnhkyPM0XlY0y",
+    "type": "multipleRecordLinks",
+    "linkedTableId": "tbld8j4xY9xkh0Vgg"
+   },
+   {
+    "name": "Créer les tâches",
+    "id": "fld9PGQWgCB9oZObC",
+    "type": "checkbox"
+   },
+   {
+    "name": "Message traitement",
+    "id": "fldOGW0eAjV7CHjbA",
+    "type": "singleLineText"
+   }
+  ]
+ },
+ {
+  "table": "Modèles de critères",
+  "id": "tbl48NrlkZijzuFhQ",
+  "fields": [
+   {
+    "name": "Critère",
+    "id": "fldbWjdp83LupgIs4",
+    "type": "singleLineText"
+   },
+   {
+    "name": "Catégorie",
+    "id": "fldqGvmxkkIitUQzN",
+    "type": "singleSelect",
+    "choices": [
+     "Client & contacts",
+     "Équipements",
+     "Technique",
+     "Bâtiment",
+     "Planning",
+     "Livraison",
+     "Documents"
+    ]
+   },
+   {
+    "name": "Obligatoire",
+    "id": "fldP0x1SH8sCDphL8",
+    "type": "checkbox"
+   },
+   {
+    "name": "S’applique à",
+    "id": "fld90qD4AsYKkpcgM",
+    "type": "multipleSelects",
+    "choices": [
+     "Toutes affaires",
+     "Ventilation",
+     "Chauffage",
+     "Brumisation / refroidissement",
+     "Abreuvement",
+     "Alimentation",
+     "Éclairage",
+     "Régulation / télémétrie",
+     "Pesage",
+     "Bâtiment / gros œuvre",
+     "Autre"
+    ]
+   },
+   {
+    "name": "Question à poser",
+    "id": "fld1QsOVJLS2fteWC",
+    "type": "singleLineText"
+   },
+   {
+    "name": "Ordre",
+    "id": "fld0J6BY5piCVFW92",
+    "type": "number"
+   },
+   {
+    "name": "Utilisations",
+    "id": "fldZ34blwuRabjCvY",
+    "type": "multipleRecordLinks",
+    "linkedTableId": "tblXMcQ0eC577gu3u"
+   }
+  ]
+ },
+ {
+  "table": "Critères dossier",
+  "id": "tblXMcQ0eC577gu3u",
+  "fields": [
+   {
+    "name": "Critère",
+    "id": "fld6h1GdmGOLlSyGZ",
+    "type": "singleLineText"
+   },
+   {
+    "name": "Catégorie",
+    "id": "fldA6GAWbXikxrVZ0",
+    "type": "singleSelect",
+    "choices": [
+     "Client & contacts",
+     "Équipements",
+     "Technique",
+     "Bâtiment",
+     "Planning",
+     "Livraison",
+     "Documents"
+    ]
+   },
+   {
+    "name": "Obligatoire",
+    "id": "fldRyyMjwT0M0hExQ",
+    "type": "checkbox"
+   },
+   {
+    "name": "Statut",
+    "id": "fldLSIGQJYstGV8sp",
+    "type": "singleSelect",
+    "choices": [
+     "Manquant",
+     "Présent – à confirmer",
+     "Ambigu / contradictoire",
+     "Validé",
+     "Non applicable"
+    ]
+   },
+   {
+    "name": "Question à poser",
+    "id": "fldmId8Uq8SaJfsvH",
+    "type": "singleLineText"
+   },
+   {
+    "name": "Réponse / valeur",
+    "id": "fldxVflkADKi4IxKe",
+    "type": "multilineText"
+   },
+   {
+    "name": "Extrait IA",
+    "id": "fldOGJZIm6JUIuTC0",
+    "type": "multilineText"
+   },
+   {
+    "name": "Source (document, page)",
+    "id": "fldiE2TcXPsw5b6pr",
+    "type": "singleLineText"
+   },
+   {
+    "name": "Validé par",
+    "id": "fldsgiCTwmhHfGH6o",
+    "type": "singleSelect",
+    "choices": [
+     "Thibaud",
+     "Cédric",
+     "Autre"
+    ]
+   },
+   {
+    "name": "Date validation",
+    "id": "fldHgbiVUQiXxWAoh",
+    "type": "dateTime"
+   },
+   {
+    "name": "Ordre",
+    "id": "fldPXK5OpYkYwnlpC",
+    "type": "number"
+   },
+   {
+    "name": "Affaire",
+    "id": "fld5MPzFsQUJF6wha",
+    "type": "multipleRecordLinks",
+    "linkedTableId": "tblaDygyqq8tI4QsN"
+   },
+   {
+    "name": "Modèle",
+    "id": "fldI74IVnnpZ0s8XG",
+    "type": "multipleRecordLinks",
+    "linkedTableId": "tbl48NrlkZijzuFhQ"
+   },
+   {
+    "name": "Bloquant",
+    "id": "fldNg7ZFHCLBQHa7H",
+    "type": "formula",
+    "formula": "IF(AND({fldRyyMjwT0M0hExQ},{fldLSIGQJYstGV8sp}!=\"Validé\",{fldLSIGQJYstGV8sp}!=\"Non applicable\"),1,0)"
+   },
+   {
+    "name": "Libellé bloquant",
+    "id": "fldIZigM281rAZof2",
+    "type": "formula",
+    "formula": "IF({fldNg7ZFHCLBQHa7H}=1,{fld6h1GdmGOLlSyGZ}&\" (\"&IF({fldLSIGQJYstGV8sp},{fldLSIGQJYstGV8sp},\"Manquant\")&\")\",\"\")"
+   }
+  ]
+ },
+ {
+  "table": "Étapes chantier",
+  "id": "tbltGM8iubXMW3YgU",
+  "fields": [
+   {
+    "name": "Étape",
+    "id": "fldHASWbwWFPqYNDc",
+    "type": "singleLineText"
+   },
+   {
+    "name": "Ordre",
+    "id": "fld1RwtnOw2eG4sEi",
+    "type": "number"
+   },
+   {
+    "name": "Responsable",
+    "id": "fldnsfRmooz8OhtsN",
+    "type": "singleSelect",
+    "choices": [
+     "Thibaud",
+     "Cédric",
+     "Autre",
+     "Sous-traitant"
+    ]
+   },
+   {
+    "name": "Date prévue",
+    "id": "fldAcx5HpaxCvWZpS",
+    "type": "date"
+   },
+   {
+    "name": "Date réelle",
+    "id": "fld0k69Rcixe2hchq",
+    "type": "date"
+   },
+   {
+    "name": "État",
+    "id": "fldkaA5JJXPIM3t5u",
+    "type": "singleSelect",
+    "choices": [
+     "À venir",
+     "En cours",
+     "Fait",
+     "Bloqué"
+    ]
+   },
+   {
+    "name": "Prérequis",
+    "id": "fldcXDYxk8iwGimYp",
+    "type": "multilineText"
+   },
+   {
+    "name": "Blocage",
+    "id": "fldObVwhpJVwvcKkj",
+    "type": "singleLineText"
+   },
+   {
+    "name": "Observations",
+    "id": "fld8NtObzgvFNFnWF",
+    "type": "multilineText"
+   },
+   {
+    "name": "Chantier",
+    "id": "fldSWrTQDJpH5Ilhb",
+    "type": "multipleRecordLinks",
+    "linkedTableId": "tbleMDpGCS2MasQGg"
+   },
+   {
+    "name": "Commandes nécessaires",
+    "id": "fldAH33WsFiZ1Dctx",
+    "type": "multipleRecordLinks",
+    "linkedTableId": "tblJH5vfiClI0nQeM"
+   },
+   {
+    "name": "Commandes non reçues",
+    "id": "fldvR5q0I4k5WywLg",
+    "type": "rollup"
+   },
+   {
+    "name": "Dernière livraison prévue",
+    "id": "fld3oqMEOzhNBllPE",
+    "type": "rollup"
+   },
+   {
+    "name": "Matériel",
+    "id": "fldHTVmnyk2r9OEnw",
+    "type": "formula",
+    "formula": "IF(COUNTA({fldAH33WsFiZ1Dctx})=0,\"—\",IF({fldvR5q0I4k5WywLg}=0,\"✅ Tout reçu\",IF(AND({fldAcx5HpaxCvWZpS},{fld3oqMEOzhNBllPE},IS_BEFORE({fld3oqMEOzhNBllPE},{fldAcx5HpaxCvWZpS})),\"🟡 Attendu à temps\",\"⚠ Risque : matériel non garanti à temps\")))"
+   },
+   {
+    "name": "Écart (jours)",
+    "id": "fldXzBqcLO8bJoQoG",
+    "type": "formula",
+    "formula": "IF(AND({fldAcx5HpaxCvWZpS},{fld0k69Rcixe2hchq}),DATETIME_DIFF({fld0k69Rcixe2hchq},{fldAcx5HpaxCvWZpS},\"days\"),IF(AND({fldAcx5HpaxCvWZpS},{fldkaA5JJXPIM3t5u}!=\"Fait\",IS_BEFORE({fldAcx5HpaxCvWZpS},TODAY())),DATETIME_DIFF(TODAY(),{fldAcx5HpaxCvWZpS},\"days\")))"
+   }
+  ]
+ },
+ {
+  "table": "Lignes de commande",
+  "id": "tblGzhoKEglgumQio",
+  "fields": [
+   {
+    "name": "Désignation",
+    "id": "fldvTJOsAaHZZPhvr",
+    "type": "singleLineText"
+   },
+   {
+    "name": "Référence",
+    "id": "fldbytSQMH96PjHz3",
+    "type": "singleLineText"
+   },
+   {
+    "name": "Qté commandée",
+    "id": "fldoRU6HvZye2uKkb",
+    "type": "number"
+   },
+   {
+    "name": "Qté reçue",
+    "id": "fldANI8GHXI0JNpze",
+    "type": "number"
+   },
+   {
+    "name": "Date dernière réception",
+    "id": "fldjoAsd93UvMO20i",
+    "type": "date"
+   },
+   {
+    "name": "Observations",
+    "id": "fldM44HTEYLeZwAdh",
+    "type": "multilineText"
+   },
+   {
+    "name": "Commande",
+    "id": "fldtHUOr3vHXYi4mn",
+    "type": "multipleRecordLinks",
+    "linkedTableId": "tblJH5vfiClI0nQeM"
+   },
+   {
+    "name": "Article",
+    "id": "fld9RGEW1wHu5oZXi",
+    "type": "multipleRecordLinks",
+    "linkedTableId": "tblYlpYft81B9ucky"
+   },
+   {
+    "name": "Reste à recevoir",
+    "id": "fld5a0ubG4pMD1e41",
+    "type": "formula",
+    "formula": "MAX({fldoRU6HvZye2uKkb}-{fldANI8GHXI0JNpze},0)"
+   },
+   {
+    "name": "État ligne",
+    "id": "fldRt0EgklHslpPSx",
+    "type": "formula",
+    "formula": "IF({fldoRU6HvZye2uKkb}=0,\"À préciser\",IF({fldANI8GHXI0JNpze}>={fldoRU6HvZye2uKkb},\"Reçue\",IF({fldANI8GHXI0JNpze}>0,\"Partielle\",\"Attendue\")))"
+   }
+  ]
+ }
+]
