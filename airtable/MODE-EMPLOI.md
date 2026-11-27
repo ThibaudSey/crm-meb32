@@ -50,6 +50,8 @@ Thibaud pilote son activité **en parlant à Claude**, au moment où il le déci
 - Ses actions sont des tâches avec Responsable = Cédric, une date, et un commentaire libre. Rien d'autre.
 
 ## Règles
+- **Pas de Google Drive** dans la conversation de pilotage, à aucun moment. Pas de Gmail non plus sauf demande explicite. Les documents sont sur OneDrive (accès à venir).
+- Quand Thibaud dit « je dois chercher / il faut que je… », c'est **sa** tâche : la créer dans Airtable, ne pas la faire à sa place.
 - Une seule conversation de pilotage : « MEB32 – Point du jour ». Toute autre session relit Airtable avant d'agir et ne modifie que ce dont elle a besoin.
 - Avant de modifier en masse (recherche par texte), afficher la liste des enregistrements trouvés et vérifier qu'ils sont tous concernés.
 - Pas de suppression de données sans accord, sauf erreur créée par Claude lui-même (le dire).
