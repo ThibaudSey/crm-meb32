@@ -4,6 +4,7 @@
 1. Lire tasks/lessons.md — leçons du projet
 2. Lire tasks/todo.md — tâches en cours
 3. Si bug Supabase : consulter les logs avant de coder
+4. Pilotage commercial / chantiers (Airtable + agenda, « point du jour ») : lire airtable/MODE-EMPLOI.md avant d'agir
 
 ## STACK
 - Next.js 14 + Supabase + Vercel
