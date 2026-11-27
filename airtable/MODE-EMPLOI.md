@@ -13,7 +13,13 @@ Thibaud pilote son activité **en parlant à Claude**, au moment où il le déci
 | Tables principales | Affaires, Clients, Contacts, Devis, Tâches, Comptes rendus, Commandes fournisseurs, Lignes de commande, Fournisseurs, Chantiers, Étapes chantier, Critères dossier. Schéma : `airtable/schema-airtable.json`. |
 | Interfaces | « Thibaud – Commercial » (Mes affaires, Revue des tâches, Pipeline, Dossiers signés et clôturés, Fournisseurs, Doublons possibles) ; « Cédric – Commandes et chantiers » (**Mes actions** en premier : date + case Fait + Commentaire) ; « Vue globale MEB32 ». |
 
-## Routines
+## Routines automatiques (tâches planifiées Claude, pas des automatisations Airtable)
+- **Brief du matin MEB32** (lun–ven 7h20) : lit Airtable + agenda, dépose « 🎧 Brief du jour » à 7h30 dans l'agenda « Claude Calendar » ; ChatGPT le lit à Thibaud en voiture. Règles : relance de devis = un appel, jamais un e-mail ; pas de partie e-mails ; lundi = « Ta semaine » + « Chantiers ». Doit avoir les connecteurs Google Agenda (et Airtable) pour fonctionner.
+- **Fourre-tout → CRM MEB32** (lun–ven 18h41) : reporte dans Airtable les notes dictées dans les créneaux « 📝 FOURRE-TOUT » de l'agenda « Thibaud MEB », vérifie les doublons avant d'écrire, puis marque le créneau « — Intégré au CRM le … — ».
+- Données ajoutées par cette autre session : table **Chantiers** (planning en semaines S1, S2…), table **Besoins chantier** (`tblMabwVcckf8siJH`, besoins à commander avec date limite), catalogue de modèles, pages Cédric « Aujourd'hui », « Cette semaine », « Planning chantiers », « Besoins à commander ». Ce qui est obsolète est préfixé « À SUPPRIMER – » : l'ignorer.
+- Ignorer tout enregistrement contenant « DEMO », « TEST » ou « Exemple ».
+
+## Routines en conversation
 
 ### « Point du jour » / « brief »
 1. Lire l'agenda « Thibaud MEB » du jour (et du lendemain si on est l'après-midi).
